@@ -42,7 +42,7 @@ local function process_ai_response(response, callback)
       content = content:gsub("`[^`]*`", "")  -- 移除内联代码
 
       -- 移除多余的空行和空白
-      content = content:gsub("\n\s*\n", "\n")  -- 移除空行
+      content = content:gsub("\n%s*\n", "\n")  -- 移除空行
       content = content:gsub("^\n+", "")  -- 移除开头的空行
       content = content:gsub("\n+$", "")  -- 移除结尾的空行
       content = content:gsub("%s+", " ")  -- 将多个空白合并为一个空格
@@ -87,7 +87,7 @@ local function process_ai_response(response, callback)
         content = content:gsub("`[^`]*`", "")  -- 移除内联代码
 
         -- 移除多余的空行和空白
-        content = content:gsub("\n\s*\n", "\n")  -- 移除空行
+        content = content:gsub("\n%s*\n", "\n")  -- 移除空行
         content = content:gsub("^\n+", "")  -- 移除开头的空行
         content = content:gsub("\n+$", "")  -- 移除结尾的空行
         content = content:gsub("%s+", " ")  -- 将多个空白合并为一个空格
