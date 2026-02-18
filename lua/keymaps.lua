@@ -368,9 +368,6 @@ function M.treesitter_textobjects()
 end
 
 function M.fugitive()
-  -- ~/.config/nvim/lua/config/keymaps.lua
-  local keymap = vim.keymap
-
   -- vim-fugitive 专用快捷键
   _set_keymap("n", "<leader>gs", "<cmd>Gstatus<CR>", { desc = "[Git] 状态" })
   _set_keymap("n", "<leader>gd", "<cmd>Gdiff<CR>", { desc = "[Git] 差异" })
@@ -410,7 +407,7 @@ function M.fugitive()
       end
     end
   })
-  keymap.set("n", "<leader>gb", function()
+  _set_keymap("n", "<leader>gb", function()
     -- 快捷键：快速 blame 并定位问题
     vim.cmd("Gblame")
     -- 自动调整窗口布局
@@ -419,9 +416,9 @@ function M.fugitive()
   end, { desc = "Git Blame (详细模式)" })
 
   -- 回滚到上一个提交（安全模式）
-  keymap.set("n", "<leader>gr1", "<cmd>Gdiff HEAD~1<CR>", { desc = "回滚到上一个提交" })
+  _set_keymap("n", "<leader>gr1", "<cmd>Gdiff HEAD~1<CR>", { desc = "回滚到上一个提交" })
 
-  keymap.set("n", "<leader>gri", function()
+  _set_keymap("n", "<leader>gri", function()
     -- 交互式重置
     local commit = vim.fn.input("重置到哪个提交? (HEAD~n 或 hash): ")
     if commit ~= "" then
@@ -429,6 +426,10 @@ function M.fugitive()
     end
   end, { desc = "交互式 Git Reset" })
 
+  -- 添加 telescope git_commits 快捷键
+  _set_keymap("n", "<leader>gh", function()
+    require("telescope.builtin").git_commits()
+  end, { desc = "Git 提交历史 (telescope)" })
 end
 
 return M

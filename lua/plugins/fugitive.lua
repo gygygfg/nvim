@@ -1,8 +1,10 @@
--- ~/.config/nvim/lua/plugins/fugitive.lua
+-- vim-fugitive 配置 - 强制加载版本
 return {
   "tpope/vim-fugitive",
-  cmd = { "G", "Git", "Gstatus", "Gdiff", "Gblame", "Gcommit" },
-  config = function()
+  -- 不使用任何懒加载选项
+  lazy = false,
+  -- 在启动时立即加载
+  confing = function()
     -- 自定义 fugitive 行为
     vim.g.fugitive_summary_format = "%s"  -- 提交信息只显示标题
     vim.g.fugitive_git_executable = "git" -- 指定 git 路径
@@ -27,5 +29,5 @@ return {
       end
     })
   end,
-  init = require('keymaps').fugitive(),
+  init = require("keymaps").fugitive()
 }
