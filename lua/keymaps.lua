@@ -284,6 +284,84 @@ local function _set_keymap(mode, lhs, rhs, opts)
   vim.keymap.set(mode, lhs, rhs, opts)
 end
 
+-- 安全的 shell 转义函数，专门处理 git commit 信息
+local function safe_shell_escape(str)
+  if not str then return "" end
+  -- 转义单引号、双引号和反斜杠
+  local escaped = str:gsub("'", "'\\''")
+  escaped = escaped:gsub('"', '\\"')
+  escaped = escaped:gsub('\\', '\\\\')
+  -- 使用单引号包裹整个字符串
+  return "'" .. escaped .. "'"
+end
+
+-- 健壮的 git commit 函数
+local function safe_git_commit(message, options)
+  options = options or {}
+  local auto_stage = options.auto_stage or false
+
+  if not message or message == "" then
+    return false, "提交信息不能为空"
+  end
+
+  -- 检查是否有需要提交的更改
+  local status_output = vim.fn.system("git status --porcelain")
+  if vim.v.shell_error ~= 0 then
+    return false, "git 状态检查失败，请确保在 git 仓库中"
+  end
+
+  if status_output == "" then
+    -- 获取更详细的状态信息用于错误提示
+    local detailed_status = vim.fn.system("git status")
+    if vim.v.shell_error == 0 then
+      -- 提取关键信息
+      local lines = vim.split(detailed_status, "\n")
+      local error_msg = "没有检测到需要提交的更改"
+      for _, line in ipairs(lines) do
+        if line:match("Changes not staged for commit") then
+          error_msg = "有未暂存的更改，使用 auto_stage=true 或先执行 git add"
+          break
+        elseif line:match("Untracked files") then
+          error_msg = "有未跟踪的文件，使用 auto_stage=true 或先执行 git add"
+          break
+        end
+      end
+      return false, error_msg
+    else
+      return false, "没有检测到需要提交的更改"
+    end
+  end
+
+  -- 构建 git 命令
+  local cmd
+  if auto_stage then
+    -- 使用 git commit -a -m 自动暂存所有更改
+    cmd = string.format('git commit -a -m %s', safe_shell_escape(message))
+  else
+    -- 只提交已暂存的更改
+    cmd = string.format('git commit -m %s', safe_shell_escape(message))
+  end
+
+  -- 执行命令
+  local result = vim.fn.system(cmd)
+  local exit_code = vim.v.shell_error
+
+  if exit_code == 0 then
+    -- 提取提交哈希
+    local commit_hash = ""
+    local lines = vim.split(result, "\n")
+    for _, line in ipairs(lines) do
+      if line:match("^%[%w+ [0-9a-f]+%]") then
+        commit_hash = line:match("%[([0-9a-f]+)%]") or ""
+        break
+      end
+    end
+    return true, commit_hash, result
+  else
+    return false, result
+  end
+end
+
 function M.main()
   vim.g.mapleader = " "
   -- 配置 Ctrl+S 保存
@@ -666,28 +744,17 @@ function M.fugitive()
       default = "",
     }, function(input)
       if input and input ~= "" then
-        -- 执行 git commit -m（使用暂存的文件）
-        local cmd = string.format("git commit -m '%s'", vim.fn.shellescape(input))
-        local result = vim.fn.system(cmd)
+        -- 使用安全的 git commit 函数，启用自动暂存
+        local success, commit_hash_or_error, result = safe_git_commit(input, { auto_stage = true })
 
-        if vim.v.shell_error == 0 then
-          -- 静默提示：只显示提交结果
-          local lines = vim.split(result, "\n")
-          local commit_hash = ""
-          for _, line in ipairs(lines) do
-            if line:match("^%[%w+ [0-9a-f]+%]") then
-              commit_hash = line:match("%[([0-9a-f]+)%]") or ""
-              break
-            end
-          end
-
-          if commit_hash ~= "" then
-            vim.notify("✓ 提交成功: " .. commit_hash:sub(1, 8) .. " - " .. input, vim.log.levels.INFO)
+        if success then
+          if commit_hash_or_error ~= "" then
+            vim.notify("✓ 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. input, vim.log.levels.INFO)
           else
             vim.notify("✓ 提交成功: " .. input, vim.log.levels.INFO)
           end
         else
-          vim.notify("✗ 提交失败: " .. result, vim.log.levels.ERROR)
+          vim.notify("✗ 提交失败: " .. commit_hash_or_error, vim.log.levels.ERROR)
         end
       else
         -- 用户没有输入，使用 AI 生成提交信息
@@ -701,28 +768,17 @@ function M.fugitive()
               default = ai_message,
             }, function(final_input)
               if final_input and final_input ~= "" then
-                -- 执行 git commit -m（使用暂存的文件）
-                local cmd = string.format("git commit -m '%s'", vim.fn.shellescape(final_input))
-                local result = vim.fn.system(cmd)
+                -- 使用安全的 git commit 函数，启用自动暂存
+                local success, commit_hash_or_error, result = safe_git_commit(final_input, { auto_stage = true })
 
-                if vim.v.shell_error == 0 then
-                  -- 静默提示：只显示提交结果
-                  local lines = vim.split(result, "\n")
-                  local commit_hash = ""
-                  for _, line in ipairs(lines) do
-                    if line:match("^%[%w+ [0-9a-f]+%]") then
-                      commit_hash = line:match("%[([0-9a-f]+)%]") or ""
-                      break
-                    end
-                  end
-
-                  if commit_hash ~= "" then
-                    vim.notify("✓ AI 提交成功: " .. commit_hash:sub(1, 8) .. " - " .. final_input, vim.log.levels.INFO)
+                if success then
+                  if commit_hash_or_error ~= "" then
+                    vim.notify("✓ AI 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. final_input, vim.log.levels.INFO)
                   else
                     vim.notify("✓ AI 提交成功: " .. final_input, vim.log.levels.INFO)
                   end
                 else
-                  vim.notify("✗ AI 提交失败: " .. result, vim.log.levels.ERROR)
+                  vim.notify("✗ AI 提交失败: " .. commit_hash_or_error, vim.log.levels.ERROR)
                 end
               else
                 vim.notify("提交已取消", vim.log.levels.WARN)
@@ -792,6 +848,39 @@ function M.fugitive()
   _set_keymap("n", "<leader>gh", function()
     require("telescope.builtin").git_commits()
   end, { desc = "Git 提交历史 (telescope)" })
+
+  -- 测试 git commit 功能的快捷键
+  _set_keymap("n", "<leader>gt", function()
+    -- 测试安全的 git commit 函数
+    local test_messages = {
+      "测试中文提交信息",
+      "feat: 添加新功能",
+      "fix: 修复bug",
+      "chore: 更新依赖",
+      "包含'单引号'的测试",
+      "包含\"双引号\"的测试",
+      "包含特殊字符!@#$%^&*()的测试",
+      "移除测试文件和备份文件"  -- 这是原始错误信息
+    }
+
+    vim.ui.select(test_messages, {
+      prompt = "选择测试提交信息:",
+    }, function(choice)
+      if choice then
+        vim.notify("测试提交信息: " .. choice, vim.log.levels.INFO)
+        local success, commit_hash_or_error, result = safe_git_commit(choice, { auto_stage = true })
+        if success then
+          if commit_hash_or_error ~= "" then
+            vim.notify("✓ 测试成功: " .. commit_hash_or_error:sub(1, 8), vim.log.levels.INFO)
+          else
+            vim.notify("✓ 测试成功", vim.log.levels.INFO)
+          end
+        else
+          vim.notify("✗ 测试失败: " .. commit_hash_or_error, vim.log.levels.ERROR)
+        end
+      end
+    end)
+  end, { desc = "测试 git commit 功能" })
 end
 
 return M
