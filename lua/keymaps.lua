@@ -16,8 +16,8 @@ local function process_ai_response(response, callback)
     return
   end
 
-  -- 打印原始响应（可选，用于调试）
-  vim.notify("收到 AI 响应，长度: " .. #response, vim.log.levels.DEBUG)
+  -- 静默调试信息
+  -- vim.notify("收到 AI 响应，长度: " .. #response, vim.log.levels.DEBUG)
 
   -- 尝试使用 vim.json.decode 解析 JSON
   local ok, parsed
@@ -36,12 +36,27 @@ local function process_ai_response(response, callback)
       -- 清理消息：移除可能的引号和空白
       content = content:gsub("^[\"']", ""):gsub("[\"']$", ""):gsub("^%s+", ""):gsub("%s+$", "")
 
+      -- 移除 Lua 注释和代码块标记
+      content = content:gsub("%-%-.*", "")  -- 移除 Lua 单行注释
+      content = content:gsub("```[^`]*```", "")  -- 移除代码块
+      content = content:gsub("`[^`]*`", "")  -- 移除内联代码
+
+      -- 移除多余的空行和空白
+      content = content:gsub("\n\s*\n", "\n")  -- 移除空行
+      content = content:gsub("^\n+", "")  -- 移除开头的空行
+      content = content:gsub("\n+$", "")  -- 移除结尾的空行
+      content = content:gsub("%s+", " ")  -- 将多个空白合并为一个空格
+
+      -- 再次清理首尾空白
+      content = content:gsub("^%s+", ""):gsub("%s+$", "")
+
       -- 限制长度
       if #content > 50 then
         content = content:sub(1, 50)
       end
 
-      vim.notify("AI 生成的提交信息: " .. content, vim.log.levels.INFO)
+      -- 静默提示：AI 生成成功
+      -- vim.notify("AI 生成的提交信息: " .. content, vim.log.levels.INFO)
       callback(content)
     else
       vim.notify("错误：API 响应格式不正确，未找到 choices 或 message 字段", vim.log.levels.ERROR)
@@ -66,12 +81,27 @@ local function process_ai_response(response, callback)
         -- 清理消息：移除可能的引号和空白
         content = content:gsub("^[\"']", ""):gsub("[\"']$", ""):gsub("^%s+", ""):gsub("%s+$", "")
 
+        -- 移除 Lua 注释和代码块标记
+        content = content:gsub("%-%-.*", "")  -- 移除 Lua 单行注释
+        content = content:gsub("```[^`]*```", "")  -- 移除代码块
+        content = content:gsub("`[^`]*`", "")  -- 移除内联代码
+
+        -- 移除多余的空行和空白
+        content = content:gsub("\n\s*\n", "\n")  -- 移除空行
+        content = content:gsub("^\n+", "")  -- 移除开头的空行
+        content = content:gsub("\n+$", "")  -- 移除结尾的空行
+        content = content:gsub("%s+", " ")  -- 将多个空白合并为一个空格
+
+        -- 再次清理首尾空白
+        content = content:gsub("^%s+", ""):gsub("%s+$", "")
+
         -- 限制长度
         if #content > 50 then
           content = content:sub(1, 50)
         end
 
-        vim.notify("AI 生成的提交信息: " .. content, vim.log.levels.INFO)
+        -- 静默提示：AI 生成成功（字符串匹配）
+        -- vim.notify("AI 生成的提交信息: " .. content, vim.log.levels.INFO)
         callback(content)
       else
         vim.notify("错误：无法解析content字段的结束位置。", vim.log.levels.ERROR)
@@ -86,7 +116,8 @@ end
 
 -- 备用方案：使用简单的规则生成提交信息
 local function generate_fallback_commit_message(diff_output, callback)
-  vim.notify("使用备用规则生成提交信息", vim.log.levels.INFO)
+  -- 静默提示：使用备用方案
+  -- vim.notify("使用备用规则生成提交信息", vim.log.levels.INFO)
 
   -- 分析 diff 内容，生成简单的提交信息
   local commit_type = "chore"
@@ -148,8 +179,8 @@ local function generate_ai_commit_message(callback)
   Git diff:
   ]] .. diff_output .. "\n\n提交信息："
 
-  -- 显示通知，表示正在请求 AI
-  vim.notify("正在请求 AI 生成提交信息...", vim.log.levels.INFO)
+  -- 静默提示：正在请求 AI
+  vim.notify("正在请求 AI 生成提交信息...", vim.log.levels.INFO, { timeout = 1500 })
 
   -- 使用阶跃星辰 API
   -- 注意：这里使用 STEP_API_KEY 环境变量
@@ -216,7 +247,8 @@ local function generate_ai_commit_message(callback)
   local curl_cmd = string.format('curl -s -X POST "%s/chat/completions" -H "Authorization: Bearer %s" -H "Content-Type: application/json" --data-binary @%s', base_url, api_key, temp_file)
 
   -- 执行curl命令并读取响应
-  vim.notify("执行curl命令: " .. string.sub(curl_cmd, 1, 100) .. "...", vim.log.levels.DEBUG)
+  -- 静默调试信息
+  -- vim.notify("执行curl命令: " .. string.sub(curl_cmd, 1, 100) .. "...", vim.log.levels.DEBUG)
   local handle = io.popen(curl_cmd)
   local response = handle:read("*a")
   local success, err = handle:close()
@@ -639,15 +671,27 @@ function M.fugitive()
         local result = vim.fn.system(cmd)
 
         if vim.v.shell_error == 0 then
-          vim.notify("Git commit executed: " .. input, vim.log.levels.INFO)
-          -- 显示提交结果
-          vim.notify("提交结果: " .. result, vim.log.levels.INFO)
+          -- 静默提示：只显示提交结果
+          local lines = vim.split(result, "\n")
+          local commit_hash = ""
+          for _, line in ipairs(lines) do
+            if line:match("^%[%w+ [0-9a-f]+%]") then
+              commit_hash = line:match("%[([0-9a-f]+)%]") or ""
+              break
+            end
+          end
+
+          if commit_hash ~= "" then
+            vim.notify("✓ 提交成功: " .. commit_hash:sub(1, 8) .. " - " .. input, vim.log.levels.INFO)
+          else
+            vim.notify("✓ 提交成功: " .. input, vim.log.levels.INFO)
+          end
         else
-          vim.notify("Git commit 失败: " .. result, vim.log.levels.ERROR)
+          vim.notify("✗ 提交失败: " .. result, vim.log.levels.ERROR)
         end
       else
         -- 用户没有输入，使用 AI 生成提交信息
-        vim.notify("正在使用 AI 生成提交信息...", vim.log.levels.INFO)
+        vim.notify("正在请求 AI 生成提交信息...", vim.log.levels.INFO, { timeout = 1500 })
 
         generate_ai_commit_message(function(ai_message)
           if ai_message then
@@ -662,14 +706,26 @@ function M.fugitive()
                 local result = vim.fn.system(cmd)
 
                 if vim.v.shell_error == 0 then
-                  vim.notify("Git commit executed with AI message: " .. final_input, vim.log.levels.INFO)
-                  -- 显示提交结果
-                  vim.notify("提交结果: " .. result, vim.log.levels.INFO)
+                  -- 静默提示：只显示提交结果
+                  local lines = vim.split(result, "\n")
+                  local commit_hash = ""
+                  for _, line in ipairs(lines) do
+                    if line:match("^%[%w+ [0-9a-f]+%]") then
+                      commit_hash = line:match("%[([0-9a-f]+)%]") or ""
+                      break
+                    end
+                  end
+
+                  if commit_hash ~= "" then
+                    vim.notify("✓ AI 提交成功: " .. commit_hash:sub(1, 8) .. " - " .. final_input, vim.log.levels.INFO)
+                  else
+                    vim.notify("✓ AI 提交成功: " .. final_input, vim.log.levels.INFO)
+                  end
                 else
-                  vim.notify("Git commit 失败: " .. result, vim.log.levels.ERROR)
+                  vim.notify("✗ AI 提交失败: " .. result, vim.log.levels.ERROR)
                 end
               else
-                vim.notify("Commit cancelled", vim.log.levels.WARN)
+                vim.notify("提交已取消", vim.log.levels.WARN)
               end
             end)
           else
