@@ -1,0 +1,15 @@
+return {
+  cmd = { "ast-grep", "lsp" },
+  lazy=false,
+  filetypes = {
+    "bash", "c", "cpp", "csharp", "css", "elixir", "go", "haskell", "html",
+    "java", "javascript", "javascriptreact", "javascript.jsx", "json", "kotlin",
+    "lua", "nix", "php", "python", "ruby", "rust", "scala", "solidity", "swift",
+    "typescript", "typescriptreact", "typescript.tsx", "yaml"
+  },
+  root_dir = function()
+    return vim.fn.getcwd()
+  end,
+  workspace_required = false,
+  single_file_support = true,
+}
