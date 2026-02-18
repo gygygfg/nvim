@@ -372,11 +372,51 @@ function M.fugitive()
   _set_keymap("n", "<leader>gs", "<cmd>Gstatus<CR>", { desc = "[Git] 状态" })
   _set_keymap("n", "<leader>gd", "<cmd>Gdiff<CR>", { desc = "[Git] 差异" })
   _set_keymap("n", "<leader>gb", "<cmd>Gblame<CR>", { desc = "[Git] 追溯" })
-  _set_keymap("n", "<leader>gc", "<cmd>Gcommit<CR>", { desc = "[Git] 提交" })
+  -- 使用自定义 git commit 功能（覆盖默认的 Gcommit）
+  _set_keymap("n", "<leader>gc", function()
+    -- 显示输入框获取提交信息
+    vim.ui.input({
+      prompt = "Commit message: ",
+      default = "",
+    }, function(input)
+      if input and input ~= "" then
+        -- 执行 git commit -am
+        local cmd = string.format("git commit -am '%s'", vim.fn.shellescape(input))
+        vim.fn.system(cmd)
+        
+        -- 显示执行结果
+        vim.notify("Git commit executed: " .. input, vim.log.levels.INFO)
+      else
+        vim.notify("Commit cancelled: no message provided", vim.log.levels.WARN)
+      end
+    end)
+  end, { desc = "[Git] 提交 (自定义)" })
   _set_keymap("n", "<leader>gp", "<cmd>Git push<CR>", { desc = "[Git] 推送" })
   _set_keymap("n", "<leader>gl", "<cmd>Git pull<CR>", { desc = "[Git] 拉取" })
   _set_keymap("n", "<leader>gw", "<cmd>Gwrite<CR>", { desc = "[Git] 暂存文件" })
   _set_keymap("n", "<leader>gr", "<cmd>Gread<CR>", { desc = "[Git] 检出文件" })
+  
+  -- Visual 模式下的 git commit 快捷键（使用选中文本作为默认提交信息）
+  _set_keymap("v", "<leader>gc", function()
+    -- 获取选中的文本作为默认提交信息
+    local saved_reg = vim.fn.getreg('"')
+    vim.cmd('normal! gv"xy')
+    local selected_text = vim.fn.getreg('x')
+    vim.fn.setreg('"', saved_reg)
+    
+    vim.ui.input({
+      prompt = "Commit message: ",
+      default = selected_text,
+    }, function(input)
+      if input and input ~= "" then
+        local cmd = string.format("git commit -am '%s'", vim.fn.shellescape(input))
+        vim.fn.system(cmd)
+        vim.notify("Git commit executed: " .. input, vim.log.levels.INFO)
+      else
+        vim.notify("Commit cancelled: no message provided", vim.log.levels.WARN)
+      end
+    end)
+  end, { desc = "[Git] 提交 (使用选中文本)" })
 
   -- 在 Gstatus 窗口中的快捷键（安装后自动生效）
   -- s: 暂存/取消暂存文件
