@@ -241,7 +241,7 @@ local function generate_ai_commit_message(callback)
   end
 
   -- 调试：显示响应前100个字符
-  vim.notify("收到响应，长度: " .. #response .. "，前100字符: " .. string.sub(response, 1, 100), vim.log.levels.DEBUG)
+  -- vim.notify("收到响应，长度: " .. #response .. "，前100字符: " .. string.sub(response, 1, 100), vim.log.levels.DEBUG)
 
   -- 处理响应
   process_ai_response(response, callback)
@@ -621,18 +621,30 @@ function M.fugitive()
   _set_keymap("n", "<leader>gb", "<cmd>Gblame<CR>", { desc = "[Git] 追溯" })
   -- 使用自定义 git commit 功能（覆盖默认的 Gcommit）
   _set_keymap("n", "<leader>gc", function()
+    -- 首先检查是否有需要提交的更改
+    local status_output = vim.fn.system("git status --porcelain")
+    if vim.v.shell_error ~= 0 or status_output == "" then
+      vim.notify("没有检测到需要提交的更改", vim.log.levels.WARN)
+      return
+    end
+
     -- 显示输入框获取提交信息
     vim.ui.input({
       prompt = "Commit message: ",
       default = "",
     }, function(input)
       if input and input ~= "" then
-        -- 执行 git commit -am
-        local cmd = string.format("git commit -am '%s'", vim.fn.shellescape(input))
-        vim.fn.system(cmd)
+        -- 执行 git commit -m（使用暂存的文件）
+        local cmd = string.format("git commit -m '%s'", vim.fn.shellescape(input))
+        local result = vim.fn.system(cmd)
 
-        -- 显示执行结果
-        vim.notify("Git commit executed: " .. input, vim.log.levels.INFO)
+        if vim.v.shell_error == 0 then
+          vim.notify("Git commit executed: " .. input, vim.log.levels.INFO)
+          -- 显示提交结果
+          vim.notify("提交结果: " .. result, vim.log.levels.INFO)
+        else
+          vim.notify("Git commit 失败: " .. result, vim.log.levels.ERROR)
+        end
       else
         -- 用户没有输入，使用 AI 生成提交信息
         vim.notify("正在使用 AI 生成提交信息...", vim.log.levels.INFO)
@@ -645,9 +657,17 @@ function M.fugitive()
               default = ai_message,
             }, function(final_input)
               if final_input and final_input ~= "" then
-                local cmd = string.format("git commit -am '%s'", vim.fn.shellescape(final_input))
-                vim.fn.system(cmd)
-                vim.notify("Git commit executed with AI message: " .. final_input, vim.log.levels.INFO)
+                -- 执行 git commit -m（使用暂存的文件）
+                local cmd = string.format("git commit -m '%s'", vim.fn.shellescape(final_input))
+                local result = vim.fn.system(cmd)
+
+                if vim.v.shell_error == 0 then
+                  vim.notify("Git commit executed with AI message: " .. final_input, vim.log.levels.INFO)
+                  -- 显示提交结果
+                  vim.notify("提交结果: " .. result, vim.log.levels.INFO)
+                else
+                  vim.notify("Git commit 失败: " .. result, vim.log.levels.ERROR)
+                end
               else
                 vim.notify("Commit cancelled", vim.log.levels.WARN)
               end
@@ -659,54 +679,11 @@ function M.fugitive()
       end
     end)
   end, { desc = "[Git] 提交 (自定义，支持 AI 生成)" })
+
   _set_keymap("n", "<leader>gp", "<cmd>Git push<CR>", { desc = "[Git] 推送" })
   _set_keymap("n", "<leader>gl", "<cmd>Git pull<CR>", { desc = "[Git] 拉取" })
   _set_keymap("n", "<leader>gw", "<cmd>Gwrite<CR>", { desc = "[Git] 暂存文件" })
   _set_keymap("n", "<leader>gr", "<cmd>Gread<CR>", { desc = "[Git] 检出文件" })
-
-  -- Visual 模式下的 git commit 快捷键（使用选中文本作为默认提交信息）
-  _set_keymap("v", "<leader>gc", function()
-    -- 获取选中的文本作为默认提交信息
-    local saved_reg = vim.fn.getreg('"')
-    vim.cmd('normal! gv"xy')
-    local selected_text = vim.fn.getreg('x')
-    vim.fn.setreg('"', saved_reg)
-
-    vim.ui.input({
-      prompt = "Commit message: ",
-      default = selected_text,
-    }, function(input)
-      if input and input ~= "" then
-        local cmd = string.format("git commit -am '%s'", vim.fn.shellescape(input))
-        vim.fn.system(cmd)
-        vim.notify("Git commit executed: " .. input, vim.log.levels.INFO)
-      else
-        -- 用户没有输入，使用 AI 生成提交信息
-        vim.notify("正在使用 AI 生成提交信息...", vim.log.levels.INFO)
-
-        generate_ai_commit_message(function(ai_message)
-          if ai_message then
-            -- 显示 AI 生成的提交信息并询问是否确认
-            vim.ui.input({
-              prompt = "AI 生成的提交信息 (按 Enter 确认，或输入新信息): ",
-              default = ai_message,
-            }, function(final_input)
-              if final_input and final_input ~= "" then
-                local cmd = string.format("git commit -am '%s'", vim.fn.shellescape(final_input))
-                vim.fn.system(cmd)
-                vim.notify("Git commit executed with AI message: " .. final_input, vim.log.levels.INFO)
-              else
-                vim.notify("Commit cancelled", vim.log.levels.WARN)
-              end
-            end)
-          else
-            vim.notify("AI 生成提交信息失败，请手动输入", vim.log.levels.ERROR)
-          end
-        end)
-      end
-    end)
-  end, { desc = "[Git] 提交 (使用选中文本，支持 AI 生成)" })
-
   -- 在 Gstatus 窗口中的快捷键（安装后自动生效）
   -- s: 暂存/取消暂存文件
   -- u: 取消暂存
