@@ -447,7 +447,18 @@ function M.fugitive()
       end
     end)
   end, { desc = "测试 git commit 功能" })
-  -- require("plugins.git.main").setup()
+  -- 配置快捷键
+  _set_keymap("n", "<leader>gdc", function()
+    vim.cmd("DiffviewOpen origin/main...HEAD")
+  end, { desc = "查看并解决冲突" })
+
+  _set_keymap("n", "<leader>gpp", function()
+    -- 合并当前分支并推送到远程
+    local branch = vim.fn.system("git rev-parse --abbrev-ref HEAD"):gsub("\n", "")
+    vim.cmd("!git pull origin " .. branch)
+    vim.cmd("!git push origin " .. branch)
+  end, { desc = "合并并推送当前分支" })
+
 end
 
 function M.telescope()
