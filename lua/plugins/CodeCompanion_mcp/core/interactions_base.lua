@@ -374,7 +374,7 @@ M.config = {
   inline = {
     adapter = {
       name = "deepseek",
-      model = "deepseek-reasoner"
+      model = "deepseek-code"
     },
 
     keymaps = {
