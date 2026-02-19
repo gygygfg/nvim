@@ -45,6 +45,17 @@ return {
         },
         git_commits = {
           theme = 'dropdown',
+          attach_mappings = function(_, map)
+            -- 将回车键设置为硬重置整个项目
+            actions.select_default:replace(actions.git_reset_hard)
+            -- 保留原有的重置快捷键
+            map({ "i", "n" }, "<c-r>m", actions.git_reset_mixed)
+            map({ "i", "n" }, "<c-r>s", actions.git_reset_soft)
+            map({ "i", "n" }, "<c-r>h", actions.git_reset_hard)
+            -- 添加一个额外的 checkout 快捷键
+            map({ "i", "n" }, "<c-c>", actions.git_checkout)
+            return true
+          end,
         },
       },
       extensions = {

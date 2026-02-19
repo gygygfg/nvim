@@ -833,17 +833,6 @@ function M.fugitive()
     vim.cmd("vertical resize 40")
   end, { desc = "Git Blame (详细模式)" })
 
-  -- 回滚到上一个提交（安全模式）
-  _set_keymap("n", "<leader>gr1", "<cmd>Gdiff HEAD~1<CR>", { desc = "回滚到上一个提交" })
-
-  _set_keymap("n", "<leader>gri", function()
-    -- 交互式重置
-    local commit = vim.fn.input("重置到哪个提交? (HEAD~n 或 hash): ")
-    if commit ~= "" then
-      vim.cmd("Git reset --mixed " .. commit)
-    end
-  end, { desc = "交互式 Git Reset" })
-
   -- 添加 telescope git_commits 快捷键
   _set_keymap("n", "<leader>gh", function()
     require("telescope.builtin").git_commits()

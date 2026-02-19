@@ -287,7 +287,7 @@ M.config = {
         opts = {
           require_approval_before = {       -- 审批配置
             buffer = false,                 -- 编辑 Neovim 缓冲区前不需审批
-            file = true,                   -- 编辑工作目录文件前不需审批
+            file = false,                   -- 编辑工作目录文件前不需审批
           },
           require_confirmation_after = true, -- 编辑后需用户确认才接受更改
           auto_accept_changes = false,      -- 不自动接受更改

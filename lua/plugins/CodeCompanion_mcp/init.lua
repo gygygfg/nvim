@@ -85,11 +85,20 @@ return {
     package.path = package.path .. ";" .. plugin_dir .. "config/?.lua"
     package.path = package.path .. ";" .. plugin_dir .. "mcp/?.lua"
     package.path = package.path .. ";" .. plugin_dir .. "extensions/?.lua"
+    
+    -- 添加根目录路径
+    package.path = package.path .. ";" .. plugin_dir .. "?.lua"
 
     -- 导入配置模块
     local config_module = require("config.config")
+    
+    -- 导入最终修复模块
+    local final_fix = require("extensions.final_fix")
 
     -- 调用配置模块的 setup 函数
     config_module.setup(opts)
+    
+    -- 启用最终修复
+    final_fix.setup()
   end,
 }
