@@ -1,6 +1,5 @@
 -- CodeCompanion MCP 集成插件配置
 -- 文件：~/.config/nvim/lua/plugins/CodeCompanion_mcp/init.lua
--- 使用模块化配置
 
 return {
   "olimorris/codecompanion.nvim",
@@ -27,11 +26,11 @@ return {
   opts = function()
     -- 首先设置包路径，确保模块可以正确加载
     local plugin_dir = "/root/.config/nvim/lua/plugins/CodeCompanion_mcp/"
-    
+
     -- 添加目录到包路径（使用绝对路径）
     package.path = package.path .. ";" .. plugin_dir .. "lua/?.lua"
     package.path = package.path .. ";" .. plugin_dir .. "lua/?/init.lua"
-    
+
     -- 同时添加原始目录作为备用
     package.path = package.path .. ";" .. plugin_dir .. "core/?.lua"
     package.path = package.path .. ";" .. plugin_dir .. "config/?.lua"
@@ -75,29 +74,29 @@ return {
   config = function(_, opts)
     -- 设置包路径，确保模块可以正确加载
     local plugin_dir = "/root/.config/nvim/lua/plugins/CodeCompanion_mcp/"
-    
+
     -- 添加目录到包路径（使用绝对路径）
     package.path = package.path .. ";" .. plugin_dir .. "lua/?.lua"
     package.path = package.path .. ";" .. plugin_dir .. "lua/?/init.lua"
-    
+
     -- 同时添加原始目录作为备用
     package.path = package.path .. ";" .. plugin_dir .. "core/?.lua"
     package.path = package.path .. ";" .. plugin_dir .. "config/?.lua"
     package.path = package.path .. ";" .. plugin_dir .. "mcp/?.lua"
     package.path = package.path .. ";" .. plugin_dir .. "extensions/?.lua"
-    
+
     -- 添加根目录路径
     package.path = package.path .. ";" .. plugin_dir .. "?.lua"
 
     -- 导入配置模块
     local config_module = require("config.config")
-    
+
     -- 导入最终修复模块
     local final_fix = require("extensions.final_fix")
 
     -- 调用配置模块的 setup 函数
     config_module.setup(opts)
-    
+
     -- 启用最终修复
     final_fix.setup()
   end,
