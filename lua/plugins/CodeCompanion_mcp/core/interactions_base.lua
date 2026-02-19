@@ -363,6 +363,8 @@ M.config = {
       },
     },
 
+    keymaps = require("keymaps").codeCompanion().chat(),
+
     opts = {
       auto_scroll = true,
       show_reasoning = true,
@@ -397,12 +399,7 @@ M.config = {
         modes = { n = "r" },
         opts = { nowait = true, noremap = true },
       },
-      stop = {
-        callback = "keymaps.stop",
-        description = "停止",
-        index = 4,
-        modes = { n = "q" },
-      },
+      require("keymaps").codeCompanion().inline(),
     },
 
     opts = {
