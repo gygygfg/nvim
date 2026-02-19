@@ -1,7 +1,7 @@
 local M = {}
 
 local function _set_keymap(mode, lhs, rhs, opts)
-  opts = opts or { noremap = true, silent = true, buffer = bufnr }
+  opts = opts or { noremap = true, silent = true }
   vim.keymap.set(mode, lhs, rhs, opts)
 end
 
@@ -126,8 +126,8 @@ function M.codeCompanion()
   end, { desc = "开关 CodeCompanion 聊天窗口" })
 
   _set_keymap("v", "<leader>cp", ":CodeCompanionActions<CR>", { desc = "选区调用 CodeCompanion 动作" }) -- 选区调用动作
-  local M = {}
-  function M.chat()
+  local keymap_config = {}
+  function keymap_config.chat()
     -- CodeCompanion chat keymaps 配置
     return {
       options = {
@@ -305,7 +305,7 @@ function M.codeCompanion()
       },
     }  
   end
-  function M.inline()
+  function keymap_config.inline()
     -- CodeCompanion inline keymaps 配置
     return {
       always_accept = {
@@ -337,7 +337,7 @@ function M.codeCompanion()
       },
     }  
   end
-  return M
+  return keymap_config
 end
 
 function M.treesitter_textobjects()
@@ -407,7 +407,7 @@ function M.fugitive()
     end
   })
 
-  _set_keymap("n", "<leader>gb", function()
+  _set_keymap("n", "<leader>gbb", function()
     -- 快捷键：快速 blame 并定位问题
     vim.cmd("Gblame")
     -- 自动调整窗口布局
@@ -434,16 +434,18 @@ function M.fugitive()
     }, function(choice)
       if choice then
         vim.notify("测试提交信息: " .. choice, vim.log.levels.INFO)
-        local success, commit_hash_or_error, result = safe_commit.safe_git_commit(choice, { auto_stage = true })
-        if success then
-          if commit_hash_or_error ~= "" then
-            vim.notify("✓ 测试成功: " .. commit_hash_or_error:sub(1, 8), vim.log.levels.INFO)
-          else
-            vim.notify("✓ 测试成功", vim.log.levels.INFO)
-          end
-        else
-          vim.notify("✗ 测试失败: " .. commit_hash_or_error, vim.log.levels.ERROR)
-        end
+        -- 注释掉不存在的 safe_commit 模块调用
+        -- local success, commit_hash_or_error, result = safe_commit.safe_git_commit(choice, { auto_stage = true })
+        -- if success then
+        --   if commit_hash_or_error ~= "" then
+        --     vim.notify("✓ 测试成功: " .. commit_hash_or_error:sub(1, 8), vim.log.levels.INFO)
+        --   else
+        --     vim.notify("✓ 测试成功", vim.log.levels.INFO)
+        --   end
+        -- else
+        --   vim.notify("✗ 测试失败: " .. commit_hash_or_error, vim.log.levels.ERROR)
+        -- end
+        vim.notify("✓ 测试功能已禁用（safe_commit 模块不存在）", vim.log.levels.WARN)
       end
     end)
   end, { desc = "测试 git commit 功能" })
@@ -453,12 +455,19 @@ function M.fugitive()
   end, { desc = "查看并解决冲突" })
 
   _set_keymap("n", "<leader>gpp", function()
-    -- 合并当前分支并推送到远程
+    -- 使用 rebase 方式合并当前分支并推送到远程
     local branch = vim.fn.system("git rev-parse --abbrev-ref HEAD"):gsub("\n", "")
-    vim.cmd("!git pull origin " .. branch)
-    vim.cmd("!git push origin " .. branch)
-  end, { desc = "合并并推送当前分支" })
-
+    -- 使用异步执行避免阻塞界面
+    vim.fn.jobstart({"git", "pull", "--rebase", "origin", branch}, {
+      on_exit = function()
+        vim.fn.jobstart({"git", "push", "origin", branch}, {
+          on_exit = function()
+            vim.notify("✓ 分支 " .. branch .. " 已成功推送", vim.log.levels.INFO)
+          end
+        })
+      end
+    })
+  end, { desc = "使用 rebase 合并并推送当前分支" })
 end
 
 function M.telescope()
