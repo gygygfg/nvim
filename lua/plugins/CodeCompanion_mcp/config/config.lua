@@ -165,18 +165,18 @@ function M.setup(opts)
   })
 
   -- 初始化 MCP 集成模块
-  local mcp_integration_success, mcp_integration = pcall(require, "mcp_integration")
-  
+  local mcp_integration_success, mcp_integration = pcall(require, "plugins.CodeCompanion_mcp.mcp.mcp_integration")
+
   if not mcp_integration_success then
     -- 尝试带路径的模块名
-    mcp_integration_success, mcp_integration = pcall(require, "mcp.mcp_integration")
+    mcp_integration_success, mcp_integration = pcall(require, "plugins.CodeCompanion_mcp.mcp.mcp_integration")
   end
-  
+
   if mcp_integration_success and mcp_integration then
     local setup_success, setup_err = pcall(function()
       mcp_integration.setup()
     end)
-    
+
     if setup_success then
       vim.notify("✅ MCP 集成模块初始化成功", vim.log.levels.INFO)
     else
@@ -193,19 +193,19 @@ function M.setup(opts)
     -- 获取扩展配置
     local extension_config = custom_tools.setup()
 
-  -- 确保扩展配置被正确设置
-  if extension_config then
-    -- 确保 opts 不为 nil
-    opts = opts or {}
-    
-    -- 将扩展配置合并到主配置中
-    if not opts.extensions then
-      opts.extensions = {}
-    end
+    -- 确保扩展配置被正确设置
+    if extension_config then
+      -- 确保 opts 不为 nil
+      opts = opts or {}
 
-    opts.extensions["custom_mcp_tools"] = extension_config
+      -- 将扩展配置合并到主配置中
+      if not opts.extensions then
+        opts.extensions = {}
+      end
 
-    vim.notify("✅ 自定义 MCP 工具扩展加载成功", vim.log.levels.INFO)
+      opts.extensions["custom_mcp_tools"] = extension_config
+
+      vim.notify("✅ 自定义 MCP 工具扩展加载成功", vim.log.levels.INFO)
 
       -- 显示可用的 MCP 工具
       if extension_config.tools then

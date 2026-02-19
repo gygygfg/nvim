@@ -8,21 +8,21 @@ local M = {}
 local mcp_config
 local success, err = pcall(function()
   -- 尝试多种可能的路径
-  mcp_config = require("mcp.mcp")
+  mcp_config = require("plugins.CodeCompanion_mcp.mcp.mcp")
 end)
 
 if not success then
   -- 尝试绝对路径
   success, err = pcall(function()
-    mcp_config = require("mcp.mcp")
+    mcp_config = require("plugins.CodeCompanion_mcp.mcp.mcp")
   end)
-  
+
   if not success then
     -- 尝试从 config 目录加载
     success, err = pcall(function()
-      mcp_config = require("config.mcp_tools_config")
+      mcp_config = require("plugins.CodeCompanion_mcp.config.mcp_tools_config")
     end)
-    
+
     if not success then
       -- 如果还是失败，创建简单的替代
       mcp_config = {
@@ -35,23 +35,32 @@ if not success then
 end
 
 -- 检查 MCP 服务器状态
-function M.check_mcp_status()
-  vim.notify("🔍 检查 MCP 服务器状态...", vim.log.levels.INFO)
+-- @param silent boolean 是否静默模式（不显示通知）
+function M.check_mcp_status(silent)
+  if not silent then
+    vim.notify("🔍 检查 MCP 服务器状态...", vim.log.levels.INFO)
+  end
 
   local servers = mcp_config.get_enabled_servers()
   local server_count = 0
 
   for name, config in pairs(servers) do
     server_count = server_count + 1
-    vim.notify("  ✅ " .. name .. " - " .. (config.description or "MCP 服务器"), vim.log.levels.INFO)
+    if not silent then
+      vim.notify("  ✅ " .. name .. " - " .. (config.description or "MCP 服务器"), vim.log.levels.INFO)
+    end
   end
 
   if server_count == 0 then
-    vim.notify("⚠️  未找到任何启用的 MCP 服务器", vim.log.levels.WARN)
+    if not silent then
+      vim.notify("⚠️  未找到任何启用的 MCP 服务器", vim.log.levels.WARN)
+    end
     return false
   end
 
-  vim.notify("✅ 共检测到 " .. server_count .. " 个启用的 MCP 服务器", vim.log.levels.INFO)
+  if not silent then
+    vim.notify("✅ 共检测到 " .. server_count .. " 个启用的 MCP 服务器", vim.log.levels.INFO)
+  end
   return true
 end
 
@@ -71,7 +80,7 @@ function M.test_mcp_server(server_name)
   vim.notify("🧪 测试 " .. server_name .. " 服务器...", vim.log.levels.INFO)
 
   -- 获取 MCP Hub 实例
-  local mcphub = require("mcphub")
+  local mcphub = require("plugins.CodeCompanion_mcp.mcphub")
   if not mcphub then
     vim.notify("❌ MCP Hub 未加载", vim.log.levels.ERROR)
     return false
@@ -165,12 +174,12 @@ end
 function M.get_tool_groups_info()
   -- 尝试从 mcphub_integration 获取工具组配置
   local success, mcphub_integration = pcall(require, "plugins.CodeCompanion_mcp.config.mcphub_integration")
-  
+
   if success and mcphub_integration.get_custom_tool_groups then
     local tool_groups = mcphub_integration.get_custom_tool_groups()
     return tool_groups.groups
   end
-  
+
   -- 如果无法获取，返回默认工具组信息
   return {
     mcp_suite = {
@@ -200,13 +209,13 @@ end
 function M.generate_tool_groups_help()
   local tool_groups = M.get_tool_groups_info()
   local help_lines = {"## 工具组使用\n"}
-  
+
   for group_name, group_info in pairs(tool_groups) do
     table.insert(help_lines, "### " .. group_info.description .. " (@{" .. group_name .. "})")
     table.insert(help_lines, "- 包含: " .. table.concat(group_info.tools, ", "))
     table.insert(help_lines, "- 使用: `@{" .. group_name .. "} [查询内容]`\n")
   end
-  
+
   return table.concat(help_lines, "\n")
 end
 
@@ -214,7 +223,7 @@ end
 function M.show_mcp_usage_help()
   -- 生成动态工具组帮助
   local tool_groups_help = M.generate_tool_groups_help()
-  
+
   local help_text = [[
   # 🚀 MCP 服务使用指南
 
@@ -304,56 +313,61 @@ end
 
 -- 创建 MCP 相关命令
 function M.create_commands()
-  -- MCP 状态命令
-  vim.api.nvim_create_user_command("MCPStatus", function()
-    M.check_mcp_status()
+  -- MCP 状态命令（支持静默参数）
+  vim.api.nvim_create_user_command("MCPStatus", function(opts)
+    local silent = opts.args == "silent" or opts.args == "quiet"
+    M.check_mcp_status(silent)
   end, {
-    desc = "检查 MCP 服务状态"
-  })
+  desc = "检查 MCP 服务状态，使用 'silent' 或 'quiet' 参数静默运行",
+  nargs = "?",
+  complete = function()
+    return {"silent", "quiet"}
+  end
+})
 
-  -- MCP 测试命令
-  vim.api.nvim_create_user_command("TestMCP", function()
-    M.test_all_mcp_servers()
-  end, {
-    desc = "测试所有 MCP 服务"
+-- MCP 测试命令
+vim.api.nvim_create_user_command("TestMCP", function()
+  M.test_all_mcp_servers()
+end, {
+desc = "测试所有 MCP 服务"
   })
 
   -- MCP 帮助命令
   vim.api.nvim_create_user_command("MCPHelp", function()
     M.show_mcp_usage_help()
   end, {
-    desc = "显示 MCP 服务使用帮助"
-  })
+  desc = "显示 MCP 服务使用帮助"
+})
 
-  -- 单个服务器测试命令
-  vim.api.nvim_create_user_command("TestMCPContext7", function()
-    M.test_mcp_server("context7")
-  end, {
-    desc = "测试 Context7 服务器"
+-- 单个服务器测试命令
+vim.api.nvim_create_user_command("TestMCPContext7", function()
+  M.test_mcp_server("context7")
+end, {
+desc = "测试 Context7 服务器"
   })
 
   vim.api.nvim_create_user_command("TestMCPCrawl4AI", function()
     M.test_mcp_server("crawl4ai")
   end, {
-    desc = "测试 Crawl4AI 服务器"
-  })
+  desc = "测试 Crawl4AI 服务器"
+})
 
-  vim.api.nvim_create_user_command("TestMCPGitHub", function()
-    M.test_mcp_server("github")
-  end, {
-    desc = "测试 GitHub 服务器"
+vim.api.nvim_create_user_command("TestMCPGitHub", function()
+  M.test_mcp_server("github")
+end, {
+desc = "测试 GitHub 服务器"
   })
 
   vim.api.nvim_create_user_command("TestMCPFilesystem", function()
     M.test_mcp_server("filesystem")
   end, {
-    desc = "测试 Filesystem 服务器"
-  })
+  desc = "测试 Filesystem 服务器"
+})
 
-  vim.api.nvim_create_user_command("TestMCPNeovim", function()
-    M.test_mcp_server("neovim")
-  end, {
-    desc = "测试 Neovim 服务器"
+vim.api.nvim_create_user_command("TestMCPNeovim", function()
+  M.test_mcp_server("neovim")
+end, {
+desc = "测试 Neovim 服务器"
   })
 end
 
@@ -362,13 +376,10 @@ function M.setup()
   -- 创建命令
   M.create_commands()
 
-  -- 检查 MCP 状态
+  -- 检查 MCP 状态（静默模式）
   vim.defer_fn(function()
-    local status = M.check_mcp_status()
-    if status then
-      -- vim.notify("🚀 MCP 服务已成功集成到 CodeCompanion", vim.log.levels.INFO)
-      -- vim.notify("💡 使用 :MCPHelp 查看详细使用指南", vim.log.levels.INFO)
-    end
+    local status = M.check_mcp_status(true)  -- 使用静默模式
+    -- 静默模式：不显示任何通知
   end, 1000)
 
   return M

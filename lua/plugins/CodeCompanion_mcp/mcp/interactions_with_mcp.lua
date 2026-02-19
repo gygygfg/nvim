@@ -5,14 +5,14 @@
 local M = {}
 
 -- 导入基础配置
-local base_config = require("core.interactions_base").config
+local base_config = require("plugins.CodeCompanion_mcp.core.interactions_base").config
 
 -- 导入 MCP 工具配置
-local mcp_config = require("config.mcp_tools_config")
+local mcp_config = require("plugins.CodeCompanion_mcp.config.mcp_tools_config")
 local mcp_tools_config = mcp_config.get_tools_config()
 
 -- 导入上下文管理器
-local context_manager = require("config.context_manager")
+local context_manager = require("plugins.CodeCompanion_mcp.config.context_manager")
 
 -- 辅助函数：从文本中提取指定章节
 local function extract_section(text, start_marker, end_marker)
@@ -210,7 +210,7 @@ local function deep_merge_configs(base, mcp)
   end
 
   -- 6. 添加 MCP Hub 自定义工具组
-  local mcphub_integration = require("config.mcphub_integration")
+  local mcphub_integration = require("plugins.CodeCompanion_mcp.config.mcphub_integration")
   local mcphub_tool_groups = mcphub_integration.get_custom_tool_groups()
 
   if mcphub_tool_groups and mcphub_tool_groups.groups then
@@ -220,7 +220,7 @@ local function deep_merge_configs(base, mcp)
   end
 
   -- 6. 添加 MCP Hub 自定义工具组
-  local mcphub_integration = require("config.mcphub_integration")
+  local mcphub_integration = require("plugins.CodeCompanion_mcp.config.mcphub_integration")
   local mcphub_tool_groups = mcphub_integration.get_custom_tool_groups()
 
   if mcphub_tool_groups and mcphub_tool_groups.groups then

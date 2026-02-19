@@ -25,23 +25,11 @@ return {
   },
   opts = function()
     -- 首先设置包路径，确保模块可以正确加载
-    local plugin_dir = "/root/.config/nvim/lua/plugins/CodeCompanion_mcp/"
-
-    -- 添加目录到包路径（使用绝对路径）
-    package.path = package.path .. ";" .. plugin_dir .. "lua/?.lua"
-    package.path = package.path .. ";" .. plugin_dir .. "lua/?/init.lua"
-
-    -- 同时添加原始目录作为备用
-    package.path = package.path .. ";" .. plugin_dir .. "core/?.lua"
-    package.path = package.path .. ";" .. plugin_dir .. "config/?.lua"
-    package.path = package.path .. ";" .. plugin_dir .. "mcp/?.lua"
-    package.path = package.path .. ";" .. plugin_dir .. "extensions/?.lua"
-
     -- 导入各个模块的配置
-    local adapters = require("core.adapters")
-    local interactions_with_mcp = require("mcp.interactions_with_mcp")
-    local display = require("core.display")
-    local mcphub_integration = require("config.mcphub_integration")
+    local adapters = require("plugins.CodeCompanion_mcp.core.adapters")
+    local interactions_with_mcp = require("plugins.CodeCompanion_mcp.mcp.interactions_with_mcp")
+    local display = require("plugins.CodeCompanion_mcp.core.display")
+    local mcphub_integration = require("plugins.CodeCompanion_mcp.config.mcphub_integration")
 
     -- 获取 MCP Hub 完整配置
     local mcphub_config = mcphub_integration.get_full_config()
@@ -72,27 +60,11 @@ return {
     return config
   end,
   config = function(_, opts)
-    -- 设置包路径，确保模块可以正确加载
-    local plugin_dir = "/root/.config/nvim/lua/plugins/CodeCompanion_mcp/"
-
-    -- 添加目录到包路径（使用绝对路径）
-    package.path = package.path .. ";" .. plugin_dir .. "lua/?.lua"
-    package.path = package.path .. ";" .. plugin_dir .. "lua/?/init.lua"
-
-    -- 同时添加原始目录作为备用
-    package.path = package.path .. ";" .. plugin_dir .. "core/?.lua"
-    package.path = package.path .. ";" .. plugin_dir .. "config/?.lua"
-    package.path = package.path .. ";" .. plugin_dir .. "mcp/?.lua"
-    package.path = package.path .. ";" .. plugin_dir .. "extensions/?.lua"
-
-    -- 添加根目录路径
-    package.path = package.path .. ";" .. plugin_dir .. "?.lua"
-
     -- 导入配置模块
-    local config_module = require("config.config")
+    local config_module = require("plugins.CodeCompanion_mcp.config.config")
 
     -- 导入最终修复模块
-    local final_fix = require("extensions.final_fix")
+    local final_fix = require("plugins.CodeCompanion_mcp.extensions.final_fix")
 
     -- 调用配置模块的 setup 函数
     config_module.setup(opts)
