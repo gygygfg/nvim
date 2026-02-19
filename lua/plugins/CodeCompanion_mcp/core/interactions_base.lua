@@ -236,11 +236,26 @@ M.config = {
       },
 
       -- 基础工具配置
+      ["file_search"] = {
+        description = "文件搜索",
+        desc = "文件搜索",
+        opts = {
+          require_approval_before = false,  -- 执行前不需要用户审批
+        },
+      },
+      ["get_changed_files"] = {
+        description = "获取已更改文件",
+        desc = "获取已更改文件",
+        opts = {
+          require_approval_before = false,  -- 执行前不需要用户审批
+        },
+      },
       ["read_file"] = {
         description = "读取文件内容",
         desc = "读取文件内容",
         opts = {
-          require_approval_before = false,
+          require_approval_before = false,  -- 执行前需用户审批
+          require_cmd_approval = true,     -- 命令本身需经批准
         },
       },
       ["grep_search"] = {
@@ -248,53 +263,68 @@ M.config = {
         desc = "使用 grep 搜索代码",
         opts = {
           respect_gitignore = true,
-          require_approval_before = false,
+          require_approval_before = false,  -- 执行前需用户审批
+          require_cmd_approval = true,     -- 命令本身需经批准
         },
       },
       ["list_code_usages"] = {
         description = "查找代码符号的用法",
         desc = "查找代码符号的用法",
         opts = {
-          require_approval_before = false,
+          require_approval_before = false,  -- 执行前不需要用户审批
         },
       },
       ["fetch_webpage"] = {
         description = "获取网页内容",
         desc = "获取网页内容",
         opts = {
-          require_approval_before = false,
+          require_approval_before = false,  -- 执行前不需要用户审批
         },
       },
       ["insert_edit_into_file"] = {
         description = "插入或编辑文件内容",
         desc = "插入或编辑文件内容",
         opts = {
-          require_approval_before = false,
-          require_confirmation_after = false,
-          auto_accept_changes = true,
+          require_approval_before = {       -- 审批配置
+            buffer = false,                 -- 编辑 Neovim 缓冲区前不需审批
+            file = true,                   -- 编辑工作目录文件前不需审批
+          },
+          require_confirmation_after = true, -- 编辑后需用户确认才接受更改
+          auto_accept_changes = false,      -- 不自动接受更改
+          file_size_limit_mb = 2,           -- 文件大小限制（超过此值可能影响操作）
         },
       },
       ["create_file"] = {
         description = "创建新文件",
         desc = "创建新文件",
         opts = {
-          require_approval_before = false,
+          require_approval_before = false,   -- 执行前需用户审批
+          require_cmd_approval = true,      -- 命令本身需经批准
         },
       },
       ["delete_file"] = {
         description = "删除文件",
         desc = "删除文件",
         opts = {
-          require_approval_before = true,
+          require_approval_before = true,   -- 执行前需用户审批
+          require_cmd_approval = false,      -- 命令本身需经批准
+          allowed_in_yolo_mode = false,     -- 不允许在"yolo模式"下执行
         },
       },
       ["cmd_runner"] = {
         description = "执行 shell 命令",  -- 工具描述
         desc = "执行 shell 命令",          -- 简短描述
         opts = {
-          require_approval_before = false,  -- 执行前不需要用户批准
-          require_cmd_approval = false,     -- 命令执行不需要单独批准
-          allowed_in_yolo_mode = true,      -- 在 yolo 模式下允许使用
+          require_approval_before = false,   -- 执行前需用户审批
+          require_cmd_approval = false,      -- 命令本身需经批准
+          allowed_in_yolo_mode = false,     -- 不允许在"yolo模式"下执行
+        },
+      },
+      ["memory"] = {
+        description = "记忆存储/检索",
+        desc = "记忆存储/检索",
+        opts = {
+          require_approval_before = false,   -- 执行前需用户审批
         },
       },
 
