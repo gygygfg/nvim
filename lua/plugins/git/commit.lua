@@ -51,8 +51,16 @@ function M.safe_git_commit(message, options)
   -- 构建 git 命令
   local cmd
   if auto_stage then
-    -- 使用 git commit -a -m 自动暂存所有更改
-    cmd = string.format('git commit -a -m %s', safe_shell_escape(message))
+    -- 先执行 git add -A 添加所有更改（包括未跟踪的文件）
+    local add_result = vim.fn.system('git add -A')
+    local add_exit_code = vim.v.shell_error
+
+    if add_exit_code ~= 0 then
+      return false, "git add 失败: " .. add_result
+    end
+
+    -- 然后执行 git commit -m
+    cmd = string.format('git commit -m %s', safe_shell_escape(message))
   else
     -- 只提交已暂存的更改
     cmd = string.format('git commit -m %s', safe_shell_escape(message))
@@ -224,20 +232,31 @@ local function generate_fallback_commit_message(diff_output, callback)
   callback(ai_message)
 end
 
-function M.generate_ai_commit_message(callback)
+function M.generate_ai_commit_message(callback, options)
   -- AI 提交信息生成函数
-  -- 获取 git diff 信息
-  local diff_output = vim.fn.system("git diff --cached")
+  options = options or {}
+  local include_unstaged = options.include_unstaged or false
 
-  if vim.v.shell_error ~= 0 or diff_output == "" then
-    -- 如果没有暂存的更改，获取未暂存的更改
-    diff_output = vim.fn.system("git diff")
+  -- 获取 git diff 信息
+  local diff_output
+
+  if include_unstaged then
+    -- 如果需要包含未暂存的更改，获取所有更改（暂存 + 未暂存）
+    diff_output = vim.fn.system("git diff HEAD")
+  else
+    -- 默认只获取暂存的更改
+    diff_output = vim.fn.system("git diff --cached")
 
     if vim.v.shell_error ~= 0 or diff_output == "" then
-      vim.notify("没有检测到 git 更改", vim.log.levels.WARN)
-      callback(nil)
-      return
+      -- 如果没有暂存的更改，获取未暂存的更改
+      diff_output = vim.fn.system("git diff")
     end
+  end
+
+  if vim.v.shell_error ~= 0 or diff_output == "" then
+    vim.notify("没有检测到 git 更改", vim.log.levels.WARN)
+    callback(nil)
+    return
   end
 
   -- 限制 diff 长度，避免 token 超限
@@ -388,6 +407,7 @@ vim.keymap.set("n", "<leader>gc", function()
       -- 用户没有输入，使用 AI 生成提交信息
       vim.notify("正在请求 AI 生成提交信息...", vim.log.levels.INFO, { timeout = 1500 })
 
+      -- 由于 auto_stage=true 会添加所有更改，所以让 AI 分析所有更改（包括未暂存的）
       M.generate_ai_commit_message(function(ai_message)
         if ai_message then
           -- 显示 AI 生成的提交信息并询问是否确认
@@ -415,7 +435,7 @@ vim.keymap.set("n", "<leader>gc", function()
         else
           vim.notify("AI 生成提交信息失败，请手动输入", vim.log.levels.ERROR)
         end
-      end)
+      end, { include_unstaged = true })
     end
   end)
 end, { desc = "[Git] 提交 (自定义，支持 AI 生成)" })
