@@ -25,18 +25,18 @@ ps aux | grep mcp-hub
 ```lua
 -- init.lua 中的最小配置
 require("codecompanion").setup({
-  extensions = {
+    extensions = {
     mcphub = {
-      callback = "mcphub.extensions.codecompanion",
-      opts = {
-        make_tools = true,
-        show_server_tools_in_chat = true,
-        make_vars = true,
-        make_slash_commands = true,
-      }
+    callback = "mcphub.extensions.codecompanion",
+    opts = {
+    make_tools = true,
+    show_server_tools_in_chat = true,
+    make_vars = true,
+    make_slash_commands = true,
     }
-  }
-})
+    }
+    }
+    })
 ```
 
 ### 验证配置生效
@@ -160,7 +160,6 @@ require("codecompanion").setup({
 
 ### 深入学习
 1. 查看完整配置: `config/mcphub_integration.lua`
-2. 学习示例: `examples/mcphub_usage_examples.lua`
 3. 阅读故障排除: `docs/mcphub_troubleshooting.md`
 
 ### 高级功能
