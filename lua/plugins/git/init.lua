@@ -1,9 +1,8 @@
 -- Git 相关插件管理配置
 -- 这个文件管理所有与 Git 相关的插件
-
 return {
-  -- vim-fugitive: Git 集成插件
   {
+    -- vim-fugitive: Git 集成插件
     "tpope/vim-fugitive",
     lazy = false,  -- 启动时立即加载
     config = function()
@@ -31,16 +30,9 @@ return {
         end
       })
     end,
-    init = function()
-      -- 设置 fugitive 快捷键
-      local keymaps = require("keymaps")
-      if keymaps and keymaps.fugitive then
-        keymaps.fugitive()
-      end
-    end
+    init =  require("keymaps").fugitive(),
   },
 
-  -- Telescope: 模糊查找插件（包含 Git 功能）
   {
     'nvim-telescope/telescope.nvim',
     tag = '0.1.8',
@@ -53,7 +45,7 @@ return {
     config = function()
       local telescope = require('telescope')
       local actions = require('telescope.actions')
-      
+
       telescope.setup({
         defaults = {
           mappings = {
@@ -110,16 +102,16 @@ return {
           },
         },
       })
-      
+
       -- 加载扩展
       telescope.load_extension('fzf')
-      
+
       -- 设置 Git 相关快捷键
       local builtin = require('telescope.builtin')
       vim.keymap.set('n', '<leader>fc', builtin.git_commits, { desc = 'Git 提交历史' })
       vim.keymap.set('n', '<leader>fs', builtin.git_status, { desc = 'Git 状态' })
       vim.keymap.set('n', '<leader>fb', builtin.git_branches, { desc = 'Git 分支' })
-      
+
       -- 设置其他 Telescope 快捷键（非 Git 相关）
       vim.keymap.set('n', '<leader>ff', builtin.find_files, { desc = '查找文件' })
       vim.keymap.set('n', '<leader>fg', builtin.live_grep, { desc = '实时搜索' })
@@ -127,23 +119,24 @@ return {
     end,
     -- 延迟加载：当使用 Git 相关命令时加载
     event = { "CmdlineEnter *git*", "BufRead */.git/*" },
+    init = require("keymaps").telescope(),
   },
 
-  -- 可选的 Git 相关插件（根据需要启用）
-  -- {
-  --   "lewis6991/gitsigns.nvim",
-  --   config = function()
-  --     require("gitsigns").setup()
-  --   end,
-  --   event = { "BufReadPre", "BufNewFile" },
-  -- },
-  
-  -- {
-  --   "sindrets/diffview.nvim",
-  --   dependencies = "nvim-lua/plenary.nvim",
-  --   config = function()
-  --     require("diffview").setup()
-  --   end,
-  --   cmd = { "DiffviewOpen", "DiffviewClose", "DiffviewToggleFiles" },
-  -- },
+  {
+    "lewis6991/gitsigns.nvim",
+    config = function()
+      require("gitsigns").setup()
+    end,
+    event = { "BufReadPre", "BufNewFile" },
+  },
+
+  {
+    "sindrets/diffview.nvim",
+    dependencies = "nvim-lua/plenary.nvim",
+    config = function()
+      require("diffview").setup()
+    end,
+    cmd = { "DiffviewOpen", "DiffviewClose", "DiffviewToggleFiles" },
+  },
+  init = require("plugins.git.commit"),
 }
