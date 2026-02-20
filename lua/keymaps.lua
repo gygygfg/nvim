@@ -121,14 +121,8 @@ end
 
 function M.codeCompanion()
   -- codeCompanion
-  _set_keymap({ "n", "v" }, "<leader>cc", function()
-    require("codecompanion").toggle() -- 开关聊天窗口
-  end, { desc = "开关 CodeCompanion 聊天窗口" })
-
-  _set_keymap("v", "<leader>cp", ":CodeCompanionActions<CR>", { desc = "选区调用 CodeCompanion 动作" }) -- 选区调用动作
-  
-  -- 注意：这个函数只设置键盘映射，不返回配置对象
-  -- CodeCompanion 插件内部会处理自己的键盘映射配置
+  _set_keymap("n", "<leader>cc", ":CodeCompanionChat<CR>", { desc = "打开 CodeCompanionChat" })
+  _set_keymap("v", "<leader>cp", ":CodeCompanionActions<CR>", { desc = "选区调用 CodeCompanion 动作" })
 end
 
 function M.treesitter_textobjects()
