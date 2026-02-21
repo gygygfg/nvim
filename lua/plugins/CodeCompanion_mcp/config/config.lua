@@ -120,8 +120,8 @@ function M.setup(opts)
   -- 设置按键绑定，捕获可能的错误
   local keymap_success, err = pcall(function()
     local keymaps = require("keymaps")
-    if keymaps and keymaps.codeCompanion then
-      keymaps.codeCompanion()
+    if keymaps and keymaps.codecompanion then
+      keymaps.codecompanion().setup()
     end
   end)
   if not keymap_success then
