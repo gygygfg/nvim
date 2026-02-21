@@ -485,7 +485,7 @@ function M.fugitive()
   end, { desc = "查看并解决冲突" })
 
   _set_keymap("n", "<leader>gpp", function()
-    -- 使用 rebase 方式合并当前分支并推送到远程
+    -- 使用 rebase 方式合并当前分支并推送到远程（静默模式）
     local branch_output = vim.fn.system("git rev-parse --abbrev-ref HEAD"):gsub("\n", "")
 
     -- 检查是否是分离头指针状态
@@ -504,7 +504,8 @@ function M.fugitive()
       return
     end
 
-    vim.notify("✓ 分支 " .. branch .. " 正在推送中...", vim.log.levels.INFO)
+    -- 静默模式：不显示开始推送的通知
+    -- vim.notify("✓ 分支 " .. branch .. " 正在推送中...", vim.log.levels.INFO)
 
     -- 使用异步执行避免阻塞界面，添加错误处理
     vim.fn.jobstart({"git", "pull", "--rebase", "origin", branch}, {
@@ -528,19 +529,16 @@ function M.fugitive()
         local behind_check = vim.fn.system("git rev-list --count HEAD..origin/" .. branch .. " 2>/dev/null || echo 0")
 
         if tonumber(ahead_check) == 0 then
-          vim.notify("ℹ️  没有需要推送的更改", vim.log.levels.INFO)
+          -- 静默模式：不显示没有需要推送的通知
+          -- vim.notify("ℹ️  没有需要推送的更改", vim.log.levels.INFO)
           return
         end
 
         vim.fn.jobstart({"git", "push", "origin", branch}, {
           on_exit = function(_, push_exit_code)
             if push_exit_code == 0 then
-              vim.notify("✓ 分支 " .. branch .. " 已成功推送到 GitHub", vim.log.levels.INFO)
-
-              -- 检查 GitHub 是否已更新
-              vim.defer_fn(function()
-                vim.notify("✅ 推送完成！请检查 GitHub 页面是否已更新", vim.log.levels.INFO)
-              end, 1000)
+              -- 静默模式：只显示简短的成功通知
+              vim.notify("✅ 分支 " .. branch .. " 已推送", vim.log.levels.INFO)
             else
               vim.notify("❌ git push 失败，请检查网络连接或权限", vim.log.levels.ERROR)
 
@@ -558,7 +556,7 @@ function M.fugitive()
         smart_git_error_handler(data, "rebase 错误")
       end
     })
-  end, { desc = "使用 rebase 合并并推送当前分支（带错误检查）" })
+  end, { desc = "使用 rebase 合并并推送当前分支（静默模式）" })
 end
 
 function M.telescope()
