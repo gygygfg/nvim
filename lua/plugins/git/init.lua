@@ -47,6 +47,13 @@ return {
     end,
     cmd = { "DiffviewOpen", "DiffviewClose", "DiffviewToggleFiles" },
   },
+  {
+    "nvim-telescope/telescope.nvim",
+    config = function()
+      require("keymaps").telescope()
+    end,
+    cmd = {"Telescope"},
+  },
   -- 加载 git commit 模块
   init = require("plugins.git.commit").setup(),
 }
