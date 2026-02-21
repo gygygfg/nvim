@@ -376,68 +376,70 @@ function M.generate_ai_commit_message(callback, options)
   process_ai_response(response, callback)
 end
 
-vim.keymap.set("n", "<leader>gc", function()
-  -- 使用自定义 git commit 功能（覆盖默认的 Gcommit）
-  -- 首先检查是否有需要提交的更改
-  local status_output = vim.fn.system("git status --porcelain")
-  if vim.v.shell_error ~= 0 or status_output == "" then
-    vim.notify("没有检测到需要提交的更改", vim.log.levels.WARN)
-    return
-  end
+function M.setup()
+  vim.keymap.set("n", "<leader>gc", function()
+    -- 使用自定义 git commit 功能（覆盖默认的 Gcommit）
+    -- 首先检查是否有需要提交的更改
+    local status_output = vim.fn.system("git status --porcelain")
+    if vim.v.shell_error ~= 0 or status_output == "" then
+      vim.notify("没有检测到需要提交的更改", vim.log.levels.WARN)
+      return
+    end
 
-  -- 显示输入框获取提交信息
-  vim.ui.input({
-    prompt = "Commit message: ",
-    default = "",
-  }, function(input)
-    if input and input ~= "" then
-      -- 使用安全的 git commit 函数，启用自动暂存
-      local success, commit_hash_or_error, result = M.safe_git_commit(input, { auto_stage = true })
+    -- 显示输入框获取提交信息
+    vim.ui.input({
+      prompt = "Commit message: ",
+      default = "",
+    }, function(input)
+      if input and input ~= "" then
+        -- 使用安全的 git commit 函数，启用自动暂存
+        local success, commit_hash_or_error, result = M.safe_git_commit(input, { auto_stage = true })
 
-      if success then
-        if commit_hash_or_error ~= "" then
-          vim.notify("✓ 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. input, vim.log.levels.INFO)
+        if success then
+          if commit_hash_or_error ~= "" then
+            vim.notify("✓ 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. input, vim.log.levels.INFO)
+          else
+            vim.notify("✓ 提交成功: " .. input, vim.log.levels.INFO)
+          end
         else
-          vim.notify("✓ 提交成功: " .. input, vim.log.levels.INFO)
+          vim.notify("✗ 提交失败: " .. commit_hash_or_error, vim.log.levels.ERROR)
         end
       else
-        vim.notify("✗ 提交失败: " .. commit_hash_or_error, vim.log.levels.ERROR)
-      end
-    else
-      -- 用户没有输入，使用 AI 生成提交信息
-      vim.notify("正在请求 AI 生成提交信息...", vim.log.levels.INFO, { timeout = 1500 })
+        -- 用户没有输入，使用 AI 生成提交信息
+        vim.notify("正在请求 AI 生成提交信息...", vim.log.levels.INFO, { timeout = 1500 })
 
-      -- 由于 auto_stage=true 会添加所有更改，所以让 AI 分析所有更改（包括未暂存的）
-      M.generate_ai_commit_message(function(ai_message)
-        if ai_message then
-          -- 显示 AI 生成的提交信息并询问是否确认
-          vim.ui.input({
-            prompt = "AI 生成的提交信息 (按 Enter 确认，或输入新信息): ",
-            default = ai_message,
-          }, function(final_input)
-            if final_input and final_input ~= "" then
-              -- 使用安全的 git commit 函数，启用自动暂存
-              local success, commit_hash_or_error, result = M.safe_git_commit(final_input, { auto_stage = true })
+        -- 由于 auto_stage=true 会添加所有更改，所以让 AI 分析所有更改（包括未暂存的）
+        M.generate_ai_commit_message(function(ai_message)
+          if ai_message then
+            -- 显示 AI 生成的提交信息并询问是否确认
+            vim.ui.input({
+              prompt = "AI 生成的提交信息 (按 Enter 确认，或输入新信息): ",
+              default = ai_message,
+            }, function(final_input)
+              if final_input and final_input ~= "" then
+                -- 使用安全的 git commit 函数，启用自动暂存
+                local success, commit_hash_or_error, result = M.safe_git_commit(final_input, { auto_stage = true })
 
-              if success then
-                if commit_hash_or_error ~= "" then
-                  vim.notify("✓ AI 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. final_input, vim.log.levels.INFO)
+                if success then
+                  if commit_hash_or_error ~= "" then
+                    vim.notify("✓ AI 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. final_input, vim.log.levels.INFO)
+                  else
+                    vim.notify("✓ AI 提交成功: " .. final_input, vim.log.levels.INFO)
+                  end
                 else
-                  vim.notify("✓ AI 提交成功: " .. final_input, vim.log.levels.INFO)
+                  vim.notify("✗ AI 提交失败: " .. commit_hash_or_error, vim.log.levels.ERROR)
                 end
               else
-                vim.notify("✗ AI 提交失败: " .. commit_hash_or_error, vim.log.levels.ERROR)
+                vim.notify("提交已取消", vim.log.levels.WARN)
               end
-            else
-              vim.notify("提交已取消", vim.log.levels.WARN)
-            end
-          end)
-        else
-          vim.notify("AI 生成提交信息失败，请手动输入", vim.log.levels.ERROR)
-        end
-      end, { include_unstaged = true })
-    end
-  end)
-end, { desc = "[Git] 提交 (自定义，支持 AI 生成)" })
+            end)
+          else
+            vim.notify("AI 生成提交信息失败，请手动输入", vim.log.levels.ERROR)
+          end
+        end, { include_unstaged = true })
+      end
+    end)
+  end, { desc = "[Git] 提交 (自定义，支持 AI 生成)" })
+end
 
 return M

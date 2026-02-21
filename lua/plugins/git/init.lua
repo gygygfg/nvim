@@ -32,9 +32,6 @@ return {
     end,
     init =  require("keymaps").fugitive(),
   },
-
-
-
   {
     "lewis6991/gitsigns.nvim",
     config = function()
@@ -42,7 +39,6 @@ return {
     end,
     event = { "BufReadPre", "BufNewFile" },
   },
-
   {
     "sindrets/diffview.nvim",
     dependencies = "nvim-lua/plenary.nvim",
@@ -51,5 +47,6 @@ return {
     end,
     cmd = { "DiffviewOpen", "DiffviewClose", "DiffviewToggleFiles" },
   },
-  init = require("plugins.git.commit"),
+  -- 加载 git commit 模块
+  init = require("plugins.git.commit").setup(),
 }
