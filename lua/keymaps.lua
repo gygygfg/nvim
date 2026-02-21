@@ -333,34 +333,11 @@ function M.codecompanion()
         modes = { n = "r" },
         opts = { nowait = true, noremap = true },
       },
-      {
-        always_accept = {
-          description = "允许全部",
-          callback = "keymaps.always_accept",
-          index = 1,
-          modes = { n = "a" },
-          opts = { nowait = true },
-        },
-        accept_change = {
-          description = "允许一次",
-          callback = "keymaps.accept_change",
-          index = 2,
-          modes = { n = "y" },
-          opts = { nowait = true, noremap = true },
-        },
-        reject_change = {
-          description = "拒绝更改",
-          callback = "keymaps.reject_change",
-          index = 3,
-          modes = { n = "r" },
-          opts = { nowait = true, noremap = true },
-        },
-        stop = {
-          description = "停止",
-          callback = "keymaps.stop",
-          index = 4,
-          modes = { n = "q" },
-        },
+      stop = {
+        description = "停止",
+        callback = "keymaps.stop",
+        index = 4,
+        modes = { n = "q" },
       },
     }
   end
@@ -449,8 +426,6 @@ function M.fugitive()
 
   _set_keymap("n", "<leader>gpp", function()
     -- 使用 rebase 方式合并当前分支并推送到远程
-    local branch = vim.fn.system("git rev-parse --abbrev-ref HEAD"):gsub("\n", "")
-    -- 使用异步执行避免阻塞界面
     local branch_output = vim.fn.system("git rev-parse --abbrev-ref HEAD"):gsub("\n", "")
 
     -- 检查是否是分离头指针状态
@@ -476,22 +451,23 @@ function M.fugitive()
       on_exit = function(_, exit_code)
         if exit_code ~= 0 then
           vim.notify("❌ git pull --rebase 失败，可能有冲突需要解决", vim.log.levels.ERROR)
-          return
-        end
 
-        -- 检查是否有冲突需要解决
-        local conflict_check = vim.fn.system("git diff --name-only --diff-filter=U")
-        if conflict_check ~= "" then
-          vim.notify("⚠️  检测到合并冲突，请先解决冲突", vim.log.levels.WARN)
-          vim.cmd("Gdiff")
+          -- 检查是否有冲突需要解决
+          local conflict_check = vim.fn.system("git diff --name-only --diff-filter=U")
+          if conflict_check ~= "" then
+            vim.notify("⚠️  检测到合并冲突，请先解决冲突", vim.log.levels.WARN)
+            vim.cmd("Gdiff")
+          end
           return
         end
 
         -- 推送前检查是否有需要推送的内容
-        local ahead_check = vim.fn.system("git rev-list --count HEAD..origin/" .. branch .. " 2>/dev/null || echo 0")
-        local behind_check = vim.fn.system("git rev-list --count origin/" .. branch .. "..HEAD 2>/dev/null || echo 0")
+        -- ahead_check: 本地分支领先于远程分支的提交数（需要推送的提交）
+        -- behind_check: 远程分支领先于本地分支的提交数（需要拉取的提交）
+        local ahead_check = vim.fn.system("git rev-list --count origin/" .. branch .. "..HEAD 2>/dev/null || echo 0")
+        local behind_check = vim.fn.system("git rev-list --count HEAD..origin/" .. branch .. " 2>/dev/null || echo 0")
 
-        if tonumber(behind_check) == 0 then
+        if tonumber(ahead_check) == 0 then
           vim.notify("ℹ️  没有需要推送的更改", vim.log.levels.INFO)
           return
         end

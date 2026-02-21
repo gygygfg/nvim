@@ -62,13 +62,8 @@ return {
     -- 导入配置模块
     local config_module = require("plugins.CodeCompanion_mcp.config.config")
 
-    -- 导入最终修复模块
-    local final_fix = require("plugins.CodeCompanion_mcp.extensions.final_fix")
-
     -- 调用配置模块的 setup 函数
     config_module.setup(opts)
 
-    -- 启用最终修复
-    final_fix.setup()
   end,
 }
