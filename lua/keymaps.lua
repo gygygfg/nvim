@@ -186,7 +186,7 @@ function M.codecompanion()
   -- codeCompanion
   local keymap = {}
   function keymap.setup()
-    _set_keymap("n", "<leader>cc", ":CodeCompanionChat<CR>", { desc = "打开 CodeCompanionChat" })
+    _set_keymap({"v","n"}, "<leader>cc", ":CodeCompanionChat<CR>", { desc = "打开 CodeCompanionChat" })
     _set_keymap("v", "<leader>cp", ":CodeCompanionActions<CR>", { desc = "选区调用 CodeCompanion 动作" })
   end
   function keymap.chat()
@@ -432,7 +432,7 @@ function M.treesitter_textobjects()
 end
 
 function M.fugitive()
-  -- vim-fugitive 专用快捷键
+  -- git 插件 vim-fugitive 专用快捷键
   -- 在 Gstatus 窗口中的快捷键（安装后自动生效）
   -- s: 暂存/取消暂存文件
   -- u: 取消暂存
@@ -562,8 +562,33 @@ end
 function M.telescope()
   -- 添加 telescope git_commits 快捷键
   _set_keymap("n", "<leader>gh", function()
-    require("telescope.builtin").git_commits()
-  end, { desc = "Git 提交历史 (telescope)" })
+    -- 硬重置整个项目到指定提交
+    require("telescope.builtin").git_commits({
+      attach_mappings = function(prompt_bufnr, map)
+        map("i", "<CR>", function()
+          local actions = require("telescope.actions")
+          local action_state = require("telescope.actions.state")
+          local selection = action_state.get_selected_entry()
+          actions.close(prompt_bufnr)
+
+          if selection then
+            vim.ui.input(
+              { prompt = "确认硬重置到 " .. selection.value .. "? (y/N): " },
+              function(confirm)
+                if confirm and confirm:lower() == "y" then
+                  vim.cmd("!git reset --hard " .. selection.value)
+                  vim.notify("✅ 已硬重置到提交: " .. selection.value, vim.log.levels.INFO)
+                else
+                  vim.notify("❌ 操作已取消", vim.log.levels.INFO)
+                end
+              end
+            )
+          end
+        end)
+        return true
+      end
+    })
+  end, { desc = "硬重置整个项目到指定提交" })
 
   -- 检查 GitHub 推送状态
   _set_keymap("n", "<leader>gps", function()
