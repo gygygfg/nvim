@@ -8,6 +8,66 @@ local function _set_keymap(mode, lhs, rhs, opts)
   vim.keymap.set(mode, lhs, rhs, opts)
 end
 
+-- 智能 Git 错误处理函数
+local function smart_git_error_handler(data, error_type)
+  if not data or #data == 0 then
+    return
+  end
+
+  local stderr_text = table.concat(data, "\n")
+
+  -- 过滤掉正常的 Git 信息输出，只显示真正的错误
+  local is_normal_git_output = false
+
+  -- 通用的正常 Git 输出模式
+  local normal_patterns = {
+    "^From ",
+    "^ *branch",
+    "^ *-> FETCH_HEAD",
+    "^Already up%-to%-date",
+    "^Fast%-forward",
+    "^Updating",
+    "^Merge made by",
+    "^Press ENTER or type command to continue",
+    "^remote: ",
+    "^Receiving objects:",
+    "^Resolving deltas:",
+    "^Unpacking objects:",
+    "^Checking connectivity:",
+    "^Counting objects:",
+    "^Compressing objects:",
+    "^Total ",
+    "^Delta compression",
+    "^Done",
+    "^To ",
+    "^ *\\[new branch\\]",
+    "^ *\\[new tag\\]",
+    "^Everything up%-to%-date",
+    "^Branch '",
+    "^Your branch is up to date",
+    "^Writing objects:",
+    "^Enumerating objects:",
+    "^Pack%-reused:",
+    "^Reusing existing pack"
+  }
+
+  -- 检查是否匹配任何正常模式
+  for _, pattern in ipairs(normal_patterns) do
+    if stderr_text:match(pattern) then
+      is_normal_git_output = true
+      break
+    end
+  end
+
+  -- 如果是正常的 Git 输出，显示为 INFO 级别
+  if is_normal_git_output then
+    vim.notify("Git: " .. stderr_text, vim.log.levels.INFO)
+  else
+    -- 否则显示为真正的错误
+    vim.notify(error_type .. ": " .. stderr_text, vim.log.levels.ERROR)
+  end
+end
+
 function M.main()
   vim.g.mapleader = " "
   -- 配置 Ctrl+S 保存
@@ -486,15 +546,8 @@ function M.fugitive()
 
               -- 显示推送失败的原因
               vim.fn.jobstart({"git", "push", "origin", branch, "--verbose"}, {
-                on_stdout = function(_, data)
-                  if data and #data > 0 then
-                    vim.notify("推送输出: " .. table.concat(data, "\n"), vim.log.levels.INFO)
-                  end
-                end,
                 on_stderr = function(_, data)
-                  if data and #data > 0 then
-                    vim.notify("推送错误: " .. table.concat(data, "\n"), vim.log.levels.ERROR)
-                  end
+                  smart_git_error_handler(data, "推送错误")
                 end
               })
             end
@@ -502,9 +555,7 @@ function M.fugitive()
         })
       end,
       on_stderr = function(_, data)
-        if data and #data > 0 then
-          vim.notify("rebase 错误: " .. table.concat(data, "\n"), vim.log.levels.ERROR)
-        end
+        smart_git_error_handler(data, "rebase 错误")
       end
     })
   end, { desc = "使用 rebase 合并并推送当前分支（带错误检查）" })
