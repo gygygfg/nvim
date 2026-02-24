@@ -13,6 +13,11 @@ M.config = {
       relative = "editor", -- 相对于编辑器窗口
       border = "rounded",  -- 圆角边框，更美观
 
+      buflisted = true, -- 設置為 true，讓聊天緩衝區出現在緩衝區列表中
+      sticky = false,   -- 可選：控制切換標籤頁時聊天窗口是否保持打開
+      layout = "vertical", -- 可選：聊天窗口的佈局方式
+
+
       -- 注意：根据源码，当 layout = "float" 时，
       -- 如果不指定 row 和 col，窗口会自动居中
       -- 所以我们移除 row 和 col 配置，让系统自动计算居中位置
