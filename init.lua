@@ -12,7 +12,7 @@ end
 vim.opt.rtp:prepend(lazypath)
 
 -- 加载函数模块
-require("nvim_venv").setup()
+require("python_venv").setup()
 require("keymaps").main()
 require("local_conf")
 require("lazy").setup("plugins", {
