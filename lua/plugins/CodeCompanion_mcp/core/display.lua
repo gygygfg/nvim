@@ -7,15 +7,23 @@ M.config = {
   chat = {
     -- 窗口配置：设置为悬浮窗布局
     window = {
-      layout = "float",    -- 悬浮窗布局
-      width = 1.0,         -- 占编辑器宽度的100%
-      height = 0.8,        -- 占编辑器高度的80%
-      relative = "editor", -- 相对于编辑器窗口
-      border = "rounded",  -- 圆角边框，更美观
-
+      -- layout = "float",    -- 悬浮窗布局
+      -- width = 1.0,         -- 占编辑器宽度的100%
+      -- height = 0.8,        -- 占编辑器高度的80%
+      -- relative = "editor", -- 相对于编辑器窗口
+      -- border = "rounded",  -- 圆角边框，更美观
       buflisted = true, -- 設置為 true，讓聊天緩衝區出現在緩衝區列表中
       sticky = false,   -- 可選：控制切換標籤頁時聊天窗口是否保持打開
-      layout = "vertical", -- 可選：聊天窗口的佈局方式
+      layout = "buffer",    -- float|vertical|horizontal|buffer 聊天窗口的佈局方式
+
+      full_height = true, -- 垂直布局时使用完整高度
+      position = nil, -- left|right|top|bottom (nil 将根据 vim.opt.splitright|vim.opt.splitbelow 默认设置)
+
+      width = 1.0, ---@return number|fun(): number
+      height = 1.0, ---@return number|fun(): number
+      border = "single",
+      relative = "editor",
+
 
 
       -- 注意：根据源码，当 layout = "float" 时，
