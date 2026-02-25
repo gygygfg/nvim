@@ -158,33 +158,36 @@ local function deep_merge_configs(base, mcp)
     -- 如果基础提示中没有工具组部分，则添加
     local has_groups_in_base = string.find(base_prompt, "## 工具组", 1, true)
     if not has_groups_in_base then
-      local groups_section = extract_section(mcp_prompt, "## 工具组", "## @{mcp_servers}")
+      local groups_section = extract_section(mcp_prompt, "## 工具组", "## MCP 工具")
       if groups_section then
         final_prompt = final_prompt .. "\n\n" .. groups_section
       end
     end
 
-    -- 如果基础提示中没有 MCP 服务器智能调用部分，则添加
-    local has_mcp_servers_in_base = string.find(base_prompt, "## @{mcp_servers}", 1, true)
+    -- 如果基础提示中没有 MCP 工具部分，则添加
+    local has_mcp_tools_in_base = string.find(base_prompt, "## MCP 工具", 1, true)
+    if not has_mcp_tools_in_base then
+      local mcp_tools_section = extract_section(mcp_prompt, "## MCP 工具", "## MCP 服务器")
+      if mcp_tools_section then
+        final_prompt = final_prompt .. "\n\n" .. mcp_tools_section
+      end
+    end
+
+    -- 如果基础提示中没有 MCP 服务器部分，则添加
+    local has_mcp_servers_in_base = string.find(base_prompt, "## MCP 服务器", 1, true)
     if not has_mcp_servers_in_base then
-      local mcp_servers_section = extract_section(mcp_prompt, "## @{mcp_servers}", "## 自主决策指南")
+      local mcp_servers_section = extract_section(mcp_prompt, "## MCP 服务器", "## MCP 使用指南")
       if mcp_servers_section then
         final_prompt = final_prompt .. "\n\n" .. mcp_servers_section
       end
     end
 
-    -- 如果基础提示中没有自主决策指南，则添加完整的 MCP 自主决策指南
-    -- 否则只添加 MCP 特定的决策指南
-    if not has_decision_guide_in_base then
-      local decision_section = extract_section(mcp_prompt, "## 自主决策指南", "## @{mcp_servers} 使用策略")
-      if decision_section then
-        final_prompt = final_prompt .. "\n\n" .. decision_section
-      end
-    else
-      -- 基础提示中已有自主决策指南，只添加 MCP 使用策略部分
-      local mcp_strategy_section = extract_section(mcp_prompt, "## @{mcp_servers} 使用策略", "## 执行流程")
-      if mcp_strategy_section then
-        final_prompt = final_prompt .. "\n\n" .. mcp_strategy_section
+    -- 如果基础提示中没有 MCP 使用指南，则添加
+    local has_mcp_guide_in_base = string.find(base_prompt, "## MCP 使用指南", 1, true)
+    if not has_mcp_guide_in_base then
+      local mcp_guide_section = extract_section(mcp_prompt, "## MCP 使用指南", "## 执行流程")
+      if mcp_guide_section then
+        final_prompt = final_prompt .. "\n\n" .. mcp_guide_section
       end
     end
 
@@ -256,7 +259,7 @@ local function debug_config()
   print("工具数量:", #vim.tbl_keys(M.config.chat.tools))
 
   -- 检查关键工具是否存在
-  local key_tools = {"crawl4ai", "crawl4ai_crawl", "context7", "neovim", "github", "filesystem"}
+  local key_tools = {"crawl4ai", "crawl4ai_crawl", "context7", "neovim", "github"}
   for _, tool in ipairs(key_tools) do
     if M.config.chat.tools[tool] then
       print("✓ 工具存在:", tool)

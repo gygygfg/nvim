@@ -138,11 +138,6 @@ function M.setup(opts)
         "star", "fork", "commit", "branch", "merge", "clone",
         "仓库", "代码库", "拉取请求", "问题", "星标", "分支"
       },
-      filesystem = {
-        "filesystem", "file", "directory", "folder", "path", "read", "write",
-        "create", "delete", "move", "copy", "rename", "list",
-        "文件系统", "文件", "目录", "文件夹", "路径", "读取", "写入"
-      }
     }
 
     -- 计算关键词匹配得分
@@ -178,92 +173,8 @@ function M.setup(opts)
     }
   end
 
-  -- 为 mcp_servers 工具组添加智能执行函数
-  custom_tools["mcp_servers"] = {
-    description = "MCP 服务器工具组 - 自动选择最合适的 MCP 服务器",
-    enabled = true,
-    opts = {
-      require_approval_before = false,
-      auto_trigger = true,
-      priority = 0, -- 最高优先级
-      keywords = {
-        "mcp", "server", "external", "service", "工具", "服务器", "外部", "服务"
-      },
-    },
-    execute = function(params)
-      local user_input = params.query or params.text or params.input or ""
-
-      -- 智能选择最合适的工具
-      local selection = intelligent_tool_selection(user_input, custom_tools)
-
-      if selection.recommended_tool and selection.meets_threshold then
-        -- 自动选择并执行推荐的工具
-        local recommended_tool = custom_tools[selection.recommended_tool]
-
-        if recommended_tool and recommended_tool.execute then
-          -- 执行推荐的工具
-          local result = recommended_tool.execute(params)
-
-          -- 添加选择信息到结果
-          result.selection_info = {
-            recommended_tool = selection.recommended_tool,
-            confidence = selection.confidence,
-            scores = selection.scores,
-            auto_selected = true
-          }
-
-          result.message = "🔍 智能选择: 自动使用 " .. selection.recommended_tool .. 
-          " 处理您的请求 (置信度: " .. string.format("%.1f%%", selection.confidence * 100) .. ")\n\n" ..
-          result.message
-
-          return result
-        end
-      end
-
-      -- 如果没有明确推荐，返回可用工具列表
-      local tool_list = {}
-      for name, tool in pairs(custom_tools) do
-        if name ~= "mcp_servers" and tool.enabled then
-          table.insert(tool_list, {
-            name = name,
-            description = tool.description,
-            score = selection.scores and selection.scores[name] or 0
-          })
-        end
-      end
-
-      -- 按得分排序
-      table.sort(tool_list, function(a, b)
-        return a.score > b.score
-      end)
-
-      local message = "🤖 MCP 服务器工具组 - 可用工具:\n\n"
-
-      for i, tool in ipairs(tool_list) do
-        local score_indicator = tool.score > 0 and " (相关度: " .. tool.score .. ")" or ""
-        message = message .. string.format("%d. @{%s}: %s%s\n", i, tool.name, tool.description, score_indicator)
-      end
-
-      message = message .. "\n💡 使用建议:\n"
-      message = message .. "- 直接使用 @{工具名} 调用特定工具\n"
-      message = message .. "- 或描述您的需求，我会自动选择最合适的工具"
-
-      if selection.recommended_tool then
-        message = message .. "\n\n🔍 智能推荐: " .. selection.recommended_tool .. 
-        " (置信度: " .. string.format("%.1f%%", selection.confidence * 100) .. ")"
-      end
-
-      return {
-        success = true,
-        message = message,
-        data = {
-          available_tools = tool_list,
-          selection = selection,
-          user_input = user_input
-        }
-      }
-    end
-  }
+  -- 注意：MCP Hub 工具（mcphub__get_current_servers, mcphub__toggle_mcp_server）
+  -- 已由 MCP Hub 扩展自动提供，无需在此重复定义
 
   -- 返回扩展配置
   return {
@@ -278,75 +189,17 @@ function M.setup(opts)
     opts = {
       -- 工具组配置
       groups = {
-        mcp_servers = {
-          description = "MCP 服务器工具组 - 自动选择最合适的 MCP 服务器处理任务",
-          tools = {"context7", "crawl4ai", "neovim", "github", "filesystem"},
-          opts = {
-            collapse_tools = true,
-            require_approval_for_group = false,
-            auto_select = true, -- 启用自动选择
-            selection_logic = "intelligent", -- 智能选择逻辑
-
-            -- 自动触发关键词
-            auto_trigger_keywords = {
-              -- 通用 MCP 关键词
-              "mcp", "server", "external", "service", "api",
-              "工具", "服务器", "外部", "服务", "接口",
-
-              -- 文档相关
-              "documentation", "docs", "API", "library", "framework", "package",
-              "文档", "说明书", "接口文档", "库", "框架", "包",
-
-              -- 网页相关
-              "crawl", "scrape", "extract", "webpage", "website", "article",
-              "爬取", "抓取", "提取", "网页", "网站", "文章",
-
-              -- 编辑器相关
-              "editor", "neovim", "vim", "buffer", "window", "tab",
-              "编辑器", "缓冲区", "窗口", "标签页",
-
-              -- GitHub 相关
-              "github", "repository", "repo", "git", "pull request", "issue",
-              "仓库", "代码库", "拉取请求", "问题",
-
-              -- 文件系统相关
-              "filesystem", "file", "directory", "folder", "path",
-              "文件系统", "文件", "目录", "文件夹", "路径"
-            },
-
-            -- 优先级配置
-            priority_rules = {
-              {
-                keywords = {"documentation", "docs", "API", "library", "框架", "文档"},
-                tool = "context7",
-                priority = 1
-              },
-              {
-                keywords = {"crawl", "scrape", "webpage", "website", "爬取", "网页"},
-                tool = "crawl4ai",
-                priority = 1
-              },
-              {
-                keywords = {"editor", "neovim", "vim", "buffer", "编辑器", "缓冲区"},
-                tool = "neovim",
-                priority = 1
-              },
-              {
-                keywords = {"github", "repository", "repo", "git", "仓库", "代码库"},
-                tool = "github",
-                priority = 1
-              },
-              {
-                keywords = {"filesystem", "file", "directory", "文件系统", "文件", "目录"},
-                tool = "filesystem",
-                priority = 1
-              }
-            }
-          }
-        },
         web_tools = {
           description = "网页相关工具组",
           tools = {"crawl4ai_crawl", "context7_search"},
+          opts = {
+            collapse_tools = false,
+            require_approval_for_group = false,
+          }
+        },
+        server_management = {
+          description = "MCP 服务器管理工具组",
+          tools = {"mcphub__get_current_servers", "mcphub__toggle_mcp_server"},
           opts = {
             collapse_tools = false,
             require_approval_for_group = false,

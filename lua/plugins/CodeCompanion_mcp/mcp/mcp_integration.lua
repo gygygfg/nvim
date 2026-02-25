@@ -102,8 +102,6 @@ function M.test_mcp_server(server_name)
     M.test_crawl4ai()
   elseif server_name == "github" then
     M.test_github()
-  elseif server_name == "filesystem" then
-    M.test_filesystem()
   elseif server_name == "neovim" then
     M.test_neovim()
   end
@@ -130,13 +128,6 @@ function M.test_github()
   vim.notify("🐙 测试 GitHub 仓库管理...", vim.log.levels.INFO)
   vim.notify("✅ GitHub 测试完成", vim.log.levels.INFO)
   vim.notify("💡 使用示例: @{github} List my repositories", vim.log.levels.INFO)
-end
-
--- 测试 Filesystem 服务器
-function M.test_filesystem()
-  vim.notify("📁 测试 Filesystem 文件操作...", vim.log.levels.INFO)
-  vim.notify("✅ Filesystem 测试完成", vim.log.levels.INFO)
-  vim.notify("💡 使用示例: @{filesystem} List files in current directory", vim.log.levels.INFO)
 end
 
 -- 测试 Neovim 服务器
@@ -250,14 +241,7 @@ function M.show_mcp_usage_help()
   - `@{github} List my repositories`
   - `@{github} Search for Python projects`
 
-  ### 4. Filesystem (@{filesystem})
-  - **功能**: 文件系统操作
-  - **使用方式**: `@{filesystem} [操作]`
-  - **示例**:
-  - `@{filesystem} List files in current directory`
-  - `@{filesystem} Search for files containing 'config'`
-
-  ### 5. Neovim (@{neovim})
+  ### 4. Neovim (@{neovim})
   - **功能**: Neovim 编辑器和缓冲区操作
   - **使用方式**: `@{neovim} [操作]`
   - **示例**:
@@ -342,34 +326,19 @@ desc = "测试所有 MCP 服务"
 -- 单个服务器测试命令
 vim.api.nvim_create_user_command("TestMCPContext7", function()
   M.test_mcp_server("context7")
-end, {
-desc = "测试 Context7 服务器"
-  })
+end, {desc = "测试 Context7 服务器"})
 
-  vim.api.nvim_create_user_command("TestMCPCrawl4AI", function()
-    M.test_mcp_server("crawl4ai")
-  end, {
-  desc = "测试 Crawl4AI 服务器"
-})
+vim.api.nvim_create_user_command("TestMCPCrawl4AI", function()
+  M.test_mcp_server("crawl4ai")
+end, {desc = "测试 Crawl4AI 服务器"})
 
 vim.api.nvim_create_user_command("TestMCPGitHub", function()
   M.test_mcp_server("github")
-end, {
-desc = "测试 GitHub 服务器"
-  })
-
-  vim.api.nvim_create_user_command("TestMCPFilesystem", function()
-    M.test_mcp_server("filesystem")
-  end, {
-  desc = "测试 Filesystem 服务器"
-})
+end, {desc = "测试 GitHub 服务器"})
 
 vim.api.nvim_create_user_command("TestMCPNeovim", function()
   M.test_mcp_server("neovim")
-end, {
-desc = "测试 Neovim 服务器"
-  })
-end
+end, {desc = "测试 Neovim 服务器"})
 
 -- 初始化函数
 function M.setup()

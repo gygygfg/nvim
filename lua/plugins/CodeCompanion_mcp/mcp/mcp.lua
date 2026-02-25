@@ -53,15 +53,6 @@ M.servers = {
     priority = 4,
     description = "GitHub 仓库管理服务",
   },
-
-  filesystem = {
-    enabled = true,
-    command = "/root/.config/nvim/mcp/wrappers/nvm-wrapper.sh",
-    args = {"npx", "@modelcontextprotocol/server-filesystem"},
-    autoApprove = true,
-    priority = 5,
-    description = "文件系统操作服务",
-  }
 }
 
 -- 获取启用的服务器

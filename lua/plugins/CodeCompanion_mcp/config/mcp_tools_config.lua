@@ -102,96 +102,12 @@ M.tools["context7_search"] = {
   },
 }
 
--- MCP 服务器智能选择工具
-M.tools["mcp_servers"] = {
-  description = "MCP 服务器工具组 - 智能自动选择最合适的 MCP 服务器",
-  desc = "MCP 服务器工具组 - 智能自动选择最合适的 MCP 服务器",
-  callback = "plugins.CodeCompanion_mcp.extensions.custom_mcp_tools",
-  opts = {
-    require_approval_before = false,
-    auto_trigger = true,
-    priority = 0, -- 最高优先级
-    keywords = {
-      "mcp", "server", "external", "service", "工具", "服务器", "外部", "服务"
-    },
-  },
-}
+-- 注意：MCP Hub 工具（mcphub__get_current_servers, mcphub__toggle_mcp_server）
+-- 已由 MCP Hub 扩展自动提供，无需在此重复定义
 
 -- ==================== MCP 特有工具组定义 ====================
 -- 只定义 MCP 特有的工具组，避免重复基础工具组
 M.groups = {
-  ["mcp_servers"] = {
-    description = "MCP 服务器工具组 - 自动选择最合适的 MCP 服务器处理任务",
-    prompt = "我正在给你访问 MCP 服务器工具组的权限，可以智能选择最合适的工具处理您的需求",
-    tools = {
-      "context7",
-      "crawl4ai",
-      "neovim",
-      "github",
-      "filesystem",
-      "context7_search",
-      "mcp_servers",
-    },
-    opts = {
-      collapse_tools = true,
-      require_approval_for_group = false,
-      auto_select = true,
-      selection_logic = "intelligent",
-      auto_trigger_keywords = {
-        -- 通用 MCP 关键词
-        "mcp", "server", "external", "service", "api",
-        "工具", "服务器", "外部", "服务", "接口",
-
-        -- 文档相关
-        "documentation", "docs", "API", "library", "framework", "package",
-        "文档", "说明书", "接口文档", "库", "框架", "包",
-
-        -- 网页相关
-        "crawl", "scrape", "extract", "webpage", "website", "article",
-        "爬取", "抓取", "提取", "网页", "网站", "文章",
-
-        -- 编辑器相关
-        "editor", "neovim", "vim", "buffer", "window", "tab",
-        "编辑器", "缓冲区", "窗口", "标签页",
-
-        -- GitHub 相关
-        "github", "repository", "repo", "git", "pull request", "issue",
-        "仓库", "代码库", "拉取请求", "问题",
-
-        -- 文件系统相关
-        "filesystem", "file", "directory", "folder", "path",
-        "文件系统", "文件", "目录", "文件夹", "路径"
-      },
-      priority_rules = {
-        {
-          keywords = {"documentation", "docs", "API", "library", "框架", "文档"},
-          tool = "context7",
-          priority = 1
-        },
-        {
-          keywords = {"crawl", "scrape", "webpage", "website", "爬取", "网页"},
-          tool = "crawl4ai",
-          priority = 1
-        },
-        {
-          keywords = {"editor", "neovim", "vim", "buffer", "编辑器", "缓冲区"},
-          tool = "neovim",
-          priority = 1
-        },
-        {
-          keywords = {"github", "repository", "repo", "git", "仓库", "代码库"},
-          tool = "github",
-          priority = 1
-        },
-        {
-          keywords = {"filesystem", "file", "directory", "文件系统", "文件", "目录"},
-          tool = "filesystem",
-          priority = 1
-        }
-      }
-    },
-  },
-
   ["mcp_web_tools"] = {
     description = "MCP 网页相关工具组",
     prompt = "我正在给你访问 MCP 网页相关工具的权限，包括文档搜索和网页爬取",
@@ -204,18 +120,33 @@ M.groups = {
       require_approval_for_group = false,
     },
   },
+
+  ["mcp_server_management"] = {
+    description = "MCP 服务器管理工具组",
+    prompt = "我正在给你访问 MCP 服务器管理工具的权限，可以查看和管理服务器状态",
+    tools = {
+      "mcphub__get_current_servers",  -- 由 MCP Hub 扩展提供
+      "mcphub__toggle_mcp_server",    -- 由 MCP Hub 扩展提供
+    },
+    opts = {
+      collapse_tools = false,
+      require_approval_for_group = false,
+    },
+  },
 }
 
 -- ==================== MCP 特有默认工具 ====================
 -- 只添加 MCP 特有的默认工具
 M.default_tools = {
-  "mcp_servers", -- MCP 服务器工具组（智能自动选择）
+  -- "context7",           -- 文档查询工具
+  -- "crawl4ai",          -- 网页爬取工具
+  "mcphub", -- 服务器状态查询（由 MCP Hub 扩展提供）
 }
 
 -- ==================== 精简系统提示配置 ====================
 -- 只包含 MCP 特有的提示信息
-M.system_prompt = [[## MCP 工具
-通过 @{mcp_servers} 可以访问：
+M.system_prompt = [[## MCP 服务器
+可用的 MCP 服务器包括：
 - @{context7}: 文档查询
 - @{crawl4ai}: 网页爬取
 - @{neovim}: 编辑器操作
@@ -223,9 +154,12 @@ M.system_prompt = [[## MCP 工具
 - @{filesystem}: 文件系统操作
 
 ## MCP 使用指南
-1. 对于 MCP 相关任务，使用 @{mcp_servers} 自动选择最合适的工具
-2. 需要确认的操作会询问许可
-3. 执行结果会自动反馈]]
+1. MCP Hub 扩展已自动提供服务器管理工具：
+- @{mcphub__get_current_servers}: 获取当前 MCP 服务器状态
+- @{mcphub__toggle_mcp_server}: 启动或停止 MCP 服务器
+2. 直接调用具体的 MCP 服务器工具（如 @{context7}、@{crawl4ai} 等）
+3. 需要确认的操作会询问许可
+4. 执行结果会自动反馈]]
 
 -- ==================== 导出函数 ====================
 function M.get_tools_config()
