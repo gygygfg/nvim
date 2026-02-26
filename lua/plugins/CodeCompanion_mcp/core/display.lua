@@ -73,7 +73,7 @@ M.config = {
     show_settings = false, -- 在聊天缓冲区顶部显示 LLM 设置？
     show_token_count = true, -- 显示每条回复的令牌数量？
     show_tools_processing = false, -- 工具执行时显示加载信息？
-    -- start_in_insert_mode = true, -- 打开聊天缓冲区时进入插入模式？
+    start_in_insert_mode = true, -- 打开聊天缓冲区时进入插入模式？
   },
 
   -- 工作流显示配置
