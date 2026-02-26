@@ -9,7 +9,7 @@ function M.setup(opts)
   opts = opts or {}
 
   -- 获取 MCP 服务器配置
-  local mcp_config = require("plugins.CodeCompanion_mcp.mcp.mcp")
+  local mcp_config = require("mcp.mcp")
   local servers = mcp_config.servers
 
   -- 创建自定义工具配置
@@ -292,7 +292,7 @@ M.exports = {
 
   -- 检查 MCP 服务器状态
   check_mcp_status = function()
-    local mcp_config = require("plugins.CodeCompanion_mcp.mcp.mcp")
+    local mcp_config = require("mcp.mcp")
     local servers = mcp_config.servers
     local status = {}
 

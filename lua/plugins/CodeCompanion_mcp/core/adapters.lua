@@ -32,13 +32,12 @@ M.config = {
               ["deepseek-code"] = {
                 nice_name = "DeepSeek Coder",
                 opts = {
-                  -- can_reason = true,
                   max_tokens = 8192
                 },
               }
             },
           },
-          temperature = { default = 0.7 },
+          temperature = { default = 0.2 },
         },
         opts = {
           timeout = 30000,

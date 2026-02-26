@@ -95,6 +95,18 @@ end
 
 -- 主配置函数
 function M.setup(opts)
+  -- 设置包路径，确保模块可以正确加载
+  -- 使用基于家目录的动态路径
+  local home_dir = vim.fn.expand("~")
+  local current_dir = home_dir .. "/.config/nvim/lua/plugins/CodeCompanion_mcp"
+
+  -- 将当前插件目录添加到包路径
+  package.path = package.path .. ";" .. current_dir .. "/?.lua"
+  package.path = package.path .. ";" .. current_dir .. "/?/init.lua"
+
+  -- 调试信息（已注释）
+  -- vim.notify("设置包路径，当前目录: " .. current_dir, vim.log.levels.DEBUG)
+
   -- 尝试初始化 MCP Hub，如果可用的话
   local mcphub_success, mcphub = pcall(require, "mcphub")
   if mcphub_success and mcphub then
@@ -132,17 +144,6 @@ function M.setup(opts)
   vim.cmd([[cab cc CodeCompanion]])
   vim.cmd([[cab ccc CodeCompanionChat]])
 
-  -- 确保聊天窗口模式切换的简单解决方案
-  vim.api.nvim_create_autocmd("BufEnter", {
-    pattern = "*CodeCompanion*",
-    callback = function()
-      -- 当进入 CodeCompanion 缓冲区时，切换到插入模式
-      vim.defer_fn(function()
-        vim.api.nvim_feedkeys("i", "n", true)
-      end, 50)
-    end,
-  })
-
   vim.api.nvim_create_autocmd("BufLeave", {
     pattern = "*CodeCompanion*",
     callback = function()
@@ -165,11 +166,26 @@ function M.setup(opts)
   })
 
   -- 初始化 MCP 集成模块
-  local mcp_integration_success, mcp_integration = pcall(require, "plugins.CodeCompanion_mcp.mcp.mcp_integration")
+  local mcp_integration_success, mcp_integration = false, nil
 
+  -- 方法1：尝试使用 loadfile 加载
+  local mcp_integration_path = current_dir .. "/mcp/mcp_integration.lua"
+  mcp_integration_success, mcp_integration = pcall(function()
+    local chunk, err = loadfile(mcp_integration_path)
+    if not chunk then
+      error("加载文件失败: " .. (err or "未知错误"))
+    end
+    return chunk()
+  end)
+
+  -- 方法2：如果方法1失败，尝试使用 require
   if not mcp_integration_success then
-    -- 尝试带路径的模块名
     mcp_integration_success, mcp_integration = pcall(require, "plugins.CodeCompanion_mcp.mcp.mcp_integration")
+  end
+
+  -- 方法3：如果方法2失败，尝试相对路径
+  if not mcp_integration_success then
+    mcp_integration_success, mcp_integration = pcall(require, "mcp.mcp_integration")
   end
 
   if mcp_integration_success and mcp_integration then
@@ -188,7 +204,27 @@ function M.setup(opts)
   end
 
   -- 加载自定义 MCP 工具扩展
-  local custom_tools_success, custom_tools = pcall(require, "plugins.CodeCompanion_mcp.extensions.custom_mcp_tools")
+  local custom_tools_success, custom_tools = false, nil
+
+  -- 方法1：尝试使用 loadfile 加载
+  local custom_tools_path = current_dir .. "/extensions/custom_mcp_tools.lua"
+  custom_tools_success, custom_tools = pcall(function()
+    local chunk, err = loadfile(custom_tools_path)
+    if not chunk then
+      error("加载文件失败: " .. (err or "未知错误"))
+    end
+    return chunk()
+  end)
+
+  -- 方法2：如果方法1失败，尝试使用 require
+  if not custom_tools_success then
+    custom_tools_success, custom_tools = pcall(require, "plugins.CodeCompanion_mcp.extensions.custom_mcp_tools")
+  end
+
+  -- 方法3：如果方法2失败，尝试相对路径
+  if not custom_tools_success then
+    custom_tools_success, custom_tools = pcall(require, "extensions.custom_mcp_tools")
+  end
   if custom_tools_success and custom_tools then
     -- 获取扩展配置
     local extension_config = custom_tools.setup()
@@ -219,67 +255,6 @@ function M.setup(opts)
   else
     vim.notify("⚠️  自定义 MCP 工具扩展加载失败: " .. tostring(custom_tools), vim.log.levels.WARN)
   end
-
-  -- 为聊天窗口添加快捷键
-  vim.api.nvim_create_autocmd("FileType", {
-    pattern = "codecompanion",
-    callback = function()
-      -- 添加全屏切换快捷键
-      vim.keymap.set("n", "<C-f>", toggle_chat_fullscreen, {
-        buffer = true,
-        desc = "切换聊天窗口全屏显示"
-      })
-
-      -- 添加 ESC 退出全屏
-      vim.keymap.set("n", "<Esc>", function()
-        if vim.w.codecompanion_is_fullscreen then
-          toggle_chat_fullscreen()
-        else
-          vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, true, true), "n", true)
-        end
-      end, { buffer = true, desc = "退出全屏或正常 ESC" })
-
-      -- 添加 MCP 服务调用示例
-      vim.keymap.set("n", "<leader>mc", function()
-        -- 在聊天窗口中插入 MCP 调用示例
-        local lines = {
-          "",
-          "# MCP 服务调用示例",
-          "",
-          "## Context7 示例（获取代码库文档）",
-          "@{context7} Get React hooks documentation",
-          "",
-          "## Crawl4AI 示例（爬取网页内容）",
-          "@{crawl4ai} Crawl https://example.com and extract main content",
-          "",
-          "## 组合使用示例",
-          "1. 先获取官方文档：@{context7} Get Express.js middleware documentation",
-          "2. 再获取最新教程：@{crawl4ai} Search for Express.js middleware tutorials",
-          "",
-          "## 手动触发",
-          "- 在查询中添加 'use context7' 强制使用 Context7",
-          "- 在查询中添加 'use crawl4ai' 强制使用 Crawl4AI",
-          "- 在查询中添加 'use mcp' 使用所有可用的 MCP 服务",
-          "",
-        }
-
-        -- 获取当前缓冲区
-        local buf = vim.api.nvim_get_current_buf()
-        local line_count = vim.api.nvim_buf_line_count(buf)
-
-        -- 在缓冲区末尾插入示例
-        for _, line in ipairs(lines) do
-          vim.api.nvim_buf_set_lines(buf, line_count, line_count, false, {line})
-          line_count = line_count + 1
-        end
-
-        -- 移动到插入内容的开头
-        vim.api.nvim_win_set_cursor(0, {line_count - #lines + 1, 0})
-
-        vim.notify("已插入 MCP 服务调用示例，按 i 开始编辑", vim.log.levels.INFO)
-      end, { buffer = true, desc = "插入 MCP 服务调用示例" })
-    end,
-  })
 end
 
 return M

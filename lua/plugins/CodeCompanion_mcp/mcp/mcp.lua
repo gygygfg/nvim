@@ -7,7 +7,7 @@ local M = {}
 M.servers = {
   context7 = {
     enabled = true,
-    command = "/root/.config/nvim/mcp/wrappers/nvm-wrapper.sh",
+    command = "$HOME/.config/nvim/mcp/wrappers/nvm-wrapper.sh",
     args = {"npx", "-y", "@upstash/context7-mcp", "--api-key", "ctx7sk-be72ace2-0150-4385-acef-8d0596dfff07"},
     autoApprove = true,
     priority = 1, -- 高优先级，用于代码文档查询
@@ -37,7 +37,7 @@ M.servers = {
 
   neovim = {
     enabled = true,
-    command = "/root/.config/nvim/mcp/wrappers/nvm-wrapper.sh",
+    command = "$HOME/.config/nvim/mcp/wrappers/nvm-wrapper.sh",
     args = {"npx", "mcp-neovim-server"},
     autoApprove = true,
     priority = 3,
@@ -46,7 +46,7 @@ M.servers = {
 
   github = {
     enabled = true,
-    command = "/root/.config/nvim/mcp/wrappers/nvm-wrapper.sh",
+    command = "$HOME/.config/nvim/mcp/wrappers/nvm-wrapper.sh",
     args = {"npx", "@modelcontextprotocol/server-github"},
     env = { GITHUB_TOKEN = "cmd:echo $GITHUB_TOKEN" },
     autoApprove = true,

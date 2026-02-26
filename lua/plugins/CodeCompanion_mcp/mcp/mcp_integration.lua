@@ -8,19 +8,19 @@ local M = {}
 local mcp_config
 local success, err = pcall(function()
   -- 尝试多种可能的路径
-  mcp_config = require("plugins.CodeCompanion_mcp.mcp.mcp")
+  mcp_config = require("mcp.mcp")
 end)
 
 if not success then
-  -- 尝试绝对路径
-  success, err = pcall(function()
-    mcp_config = require("plugins.CodeCompanion_mcp.mcp.mcp")
-  end)
+    -- 尝试绝对路径
+    success, err = pcall(function()
+      mcp_config = require("plugins.CodeCompanion_mcp.mcp.mcp")
+    end)
 
   if not success then
     -- 尝试从 config 目录加载
     success, err = pcall(function()
-      mcp_config = require("plugins.CodeCompanion_mcp.config.mcp_tools_config")
+      mcp_config = require("config.mcp_tools_config")
     end)
 
     if not success then
@@ -80,7 +80,7 @@ function M.test_mcp_server(server_name)
   vim.notify("🧪 测试 " .. server_name .. " 服务器...", vim.log.levels.INFO)
 
   -- 获取 MCP Hub 实例
-  local mcphub = require("plugins.CodeCompanion_mcp.mcphub")
+  local mcphub = require("mcphub")
   if not mcphub then
     vim.notify("❌ MCP Hub 未加载", vim.log.levels.ERROR)
     return false
@@ -164,7 +164,7 @@ end
 -- 获取工具组信息
 function M.get_tool_groups_info()
   -- 尝试从 mcphub_integration 获取工具组配置
-  local success, mcphub_integration = pcall(require, "plugins.CodeCompanion_mcp.config.mcphub_integration")
+  local success, mcphub_integration = pcall(require, "config.mcphub_integration")
 
   if success and mcphub_integration.get_custom_tool_groups then
     local tool_groups = mcphub_integration.get_custom_tool_groups()
@@ -302,12 +302,12 @@ function M.create_commands()
     local silent = opts.args == "silent" or opts.args == "quiet"
     M.check_mcp_status(silent)
   end, {
-  desc = "检查 MCP 服务状态，使用 'silent' 或 'quiet' 参数静默运行",
-  nargs = "?",
-  complete = function()
-    return {"silent", "quiet"}
-  end
-})
+    desc = "检查 MCP 服务状态，使用 'silent' 或 'quiet' 参数静默运行",
+    nargs = "?",
+    complete = function()
+      return {"silent", "quiet"}
+    end
+  })
 
 -- MCP 测试命令
 vim.api.nvim_create_user_command("TestMCP", function()
@@ -339,6 +339,9 @@ end, {desc = "测试 GitHub 服务器"})
 vim.api.nvim_create_user_command("TestMCPNeovim", function()
   M.test_mcp_server("neovim")
 end, {desc = "测试 Neovim 服务器"})
+
+  -- 函数结束
+end
 
 -- 初始化函数
 function M.setup()
