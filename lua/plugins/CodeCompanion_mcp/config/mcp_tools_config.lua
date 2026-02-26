@@ -138,6 +138,7 @@ M.groups = {
 -- ==================== MCP 特有默认工具 ====================
 -- 只添加 MCP 特有的默认工具
 M.default_tools = {
+  "use_mcp_tool",
   -- "context7",           -- 文档查询工具
   -- "crawl4ai",          -- 网页爬取工具
   "mcphub", -- 服务器状态查询（由 MCP Hub 扩展提供）
