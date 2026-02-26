@@ -11,10 +11,14 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
--- 加载函数模块
+-- 加载 NVM 环境配置
+require("nvm_init").setup()
 require("python_venv").setup()
+
+-- 加载函数模块
 require("keymaps").main()
 require("local_conf")
+
 require("lazy").setup("plugins", {
   defaults = {
     lazy = true, -- 开启默认懒加载
