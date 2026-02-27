@@ -64,6 +64,5 @@ return {
 
     -- 调用配置模块的 setup 函数
     config_module.setup(opts)
-
   end,
 }

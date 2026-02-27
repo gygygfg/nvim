@@ -6,10 +6,8 @@ local M = {}
 
 -- 基础系统提示函数
 local function get_base_system_prompt()
-  local str = [[你是一个专业的 AI 编程助手，可以自主决定使用合适的工具来完成任务。
-
-  ## 工具组
-  你也可以使用工具组来一次性获得多个工具：
+  local str = [[## 工具组
+  你可以使用工具组来一次性获得多个工具：
   - @{files}: 文件操作工具集
 
   ## 自主决策指南
@@ -28,7 +26,8 @@ local function get_base_system_prompt()
   - 你需要根据结果决定下一步操作
   - 修改完代码后使用#{lsp}检查代码是否正确
 
-  请根据任务需求自主选择合适的工具，无需等待用户指定。]]
+  请根据任务需求自主选择合适的工具，无需等待用户指定。
+  若有需要用户决定或操作时等待用户操作]]
   return str:gsub("%s+", " ")
 end
 
@@ -338,9 +337,8 @@ M.config = {
         default_tools = {
           "files",           -- 文件操作工具组：包含 read_file, create_file, delete_file, insert_edit_into_file
           "cmd_runner",      -- 命令行执行工具：用于执行 shell 命令
+          "memory",
           -- "fetch_webpage"  -- 网页获取工具：注释掉，因为现在使用 crawl4ai 进行网页爬取
-          -- 注意：如需使用 crawl4ai 网页爬取工具，请确保 Docker 服务已启动
-          -- 启动命令：./docker-compose-manage.sh up（在 crawl4ai 目录下）
         },
 
         folds = {
