@@ -10,14 +10,14 @@ local function get_base_system_prompt()
   你可以使用工具组来一次性获得多个工具：
   - @{files}: 文件操作工具集
 
-  ## 自主决策指南
+## 自主决策指南
   1. 分析用户请求，判断需要哪些工具
   2. 对于文件操作任务，考虑@{files}
   3. 对于需要执行命令的任务，使用@{cmd_runner}
   4. 对于需要搜索代码的任务，使用@{cmd_runner}的grep命令或@{list_code_usages}
-  5. 对于需要获取网页内容的任务，优先考虑使用 crawl4ai 工具
-  6. 对于简单的网页获取，使用 fetch_webpage
-  7. 复杂任务可以按需组合多个工具
+  5. 对于需要获取网页内容的任务，使用 MCP 工具（如 crawl4ai）
+  6. 复杂任务可以按需组合多个工具
+  7. MCP 工具会自动发现，无需手动指定
 
   ## 执行流程
   - 你需要自动选择合适的工具执行
@@ -338,7 +338,7 @@ M.config = {
           "files",           -- 文件操作工具组：包含 read_file, create_file, delete_file, insert_edit_into_file
           "cmd_runner",      -- 命令行执行工具：用于执行 shell 命令
           "memory",
-          -- "fetch_webpage"  -- 网页获取工具：注释掉，因为现在使用 crawl4ai 进行网页爬取
+          -- MCP 工具将由 MCP Hub 动态添加
         },
 
         folds = {

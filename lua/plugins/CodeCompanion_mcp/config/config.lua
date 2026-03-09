@@ -244,13 +244,13 @@ function M.setup(opts)
       vim.notify("✅ 自定义 MCP 工具扩展加载成功", vim.log.levels.INFO)
 
       -- 显示可用的 MCP 工具
-      if extension_config.tools then
-        local tool_count = 0
-        for name, _ in pairs(extension_config.tools) do
-          tool_count = tool_count + 1
-        end
-        vim.notify("🔧 加载了 " .. tool_count .. " 个 MCP 工具", vim.log.levels.INFO)
-      end
+      -- if extension_config.tools then
+      --   local tool_count = 0
+      --   for name, _ in pairs(extension_config.tools) do
+      --     tool_count = tool_count + 1
+      --   end
+      --   vim.notify("🔧 加载了 " .. tool_count .. " 个 MCP 工具", vim.log.levels.INFO)
+      -- end
     end
   else
     vim.notify("⚠️  自定义 MCP 工具扩展加载失败: " .. tostring(custom_tools), vim.log.levels.WARN)

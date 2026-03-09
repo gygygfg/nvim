@@ -1,21 +1,23 @@
 return {
   'nvim-tree/nvim-tree.lua',
   dependencies = {
-    { 'nvim-tree/nvim-web-devicons' },
-    {
-      'yamatsum/nvim-nonicons',
-      dependencies = { 'kyazdani42/nvim-web-devicons' },
-      config = function()
-        require('nvim-nonicons').setup()
-      end
-    },
+    'nvim-tree/nvim-web-devicons',
+    'yamatsum/nvim-nonicons',
   },
   config = function()
-    local nonicons_extention = require("nvim-nonicons.extentions.nvim-tree")
+    -- 先设置 web-devicons
+    require('nvim-web-devicons').setup()
+    
+    -- 然后设置 nonicons
+    require('nvim-nonicons').setup()
+    
+    -- 加载 nvim-tree 扩展（注意拼写：extensions 不是 extentions）
+    local nonicons_extension = require("nvim-nonicons.extensions.nvim-tree")
+    
     require("nvim-tree").setup({
       renderer = {
         icons = {
-          glyphs = nonicons_extention.glyphs,
+          glyphs = nonicons_extension.glyphs,
         },
       },
     })

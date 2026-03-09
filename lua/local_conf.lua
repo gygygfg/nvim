@@ -173,6 +173,10 @@ vim.opt.formatoptions:append("j") -- 在合适的地方删除注释前缀
 -- 主题设置
 -- 支持 24 位彩色
 opt.termguicolors = true
+-- 优先尝试 Monospaced 版本
+-- vim.opt.guifont = "FiraCode Nerd Font Mono:h11"
+-- 或者尝试
+-- vim.opt.guifont = "Monaspace Argon NF:h11"
 opt.background = white
 opt.syntax = "on"
 -- vim.cmd[[colorscheme delek]]

@@ -1,5 +1,5 @@
--- MCP Hub 自动批准配置集成
--- 文件: config/mcphub_auto_approve.lua
+-- MCP Hub 动态自动批准配置
+-- 支持动态发现的工具自动批准
 
 local M = {}
 
@@ -12,51 +12,56 @@ function M.get_config()
     -- 全局自动批准
     auto_approve = false,
 
-    -- 函数式自动批准
+    -- 动态工具自动批准函数
     auto_approve_function = function(params)
       -- 当 CodeCompanion 自动工具模式启用时自动批准
       if vim.g.codecompanion_auto_tool_mode == true then
         return true
       end
 
-      -- 自动批准 GitHub issue 读取
-      if params.server_name == "github" and params.tool_name == "get_issue" then
-        return true
+      -- 自动批准只读操作
+      local read_only_tools = {
+        "read", "get", "list", "search", "query", "fetch",
+        "extract", "crawl", "summarize", "diagnostics"
+      }
+      
+      for _, prefix in ipairs(read_only_tools) do
+        if params.tool_name:find(prefix) then
+          return true
+        end
       end
 
-      -- 自动批准 Neovim 缓冲区操作
-      if params.server_name == "neovim" and 
-        (params.tool_name == "read_file" or params.tool_name == "get_buffer_content") then
-        return true
-      end
-
-      -- 阻止访问私有仓库
-      if params.arguments and params.arguments.repo == "private" then
-        return "您不能访问我的私有仓库"
+      -- 阻止危险操作
+      local dangerous_tools = {
+        "delete", "remove", "rm", "format", "reset", "clear",
+        "shutdown", "stop", "kill", "terminate"
+      }
+      
+      for _, keyword in ipairs(dangerous_tools) do
+        if params.tool_name:find(keyword) then
+          return "危险操作需要手动批准: " .. params.tool_name
+        end
       end
 
       -- 默认显示确认提示
       return false
     end,
 
-    -- 默认自动批准的工具列表
-    default_auto_approve_tools = {
-      -- Neovim 相关工具
-      "neovim__read_file",
-      "neovim__get_buffer_content",
-      "neovim__list_buffers",
-      "neovim__get_diagnostics",
+    -- 动态默认自动批准的工具模式
+    default_auto_approve_patterns = {
+      -- Neovim 相关工具（只读）
+      "neovim__read",
+      "neovim__get",
+      "neovim__list",
+      "neovim__diagnostics",
 
       -- GitHub 相关工具（只读操作）
-      "github__get_issue",
-      "github__list_issues",
-      "github__get_issue_comments",
-      "github__get_file_contents",
-      "github__search_code",
+      "github__get",
+      "github__list",
+      "github__search",
 
       -- Context7 相关工具
-      "context7__search",
-      "context7__query",
+      "context7__",
 
       -- Crawl4AI 相关工具（只读操作）
       "crawl4ai__crawl",
@@ -64,42 +69,44 @@ function M.get_config()
       "crawl4ai__summarize",
     },
 
-    -- 需要手动批准的工具列表
-    manual_approval_tools = {
+    -- 需要手动批准的工具模式
+    manual_approval_patterns = {
       -- 写操作工具
-      "neovim__write_file",
-      "neovim__edit_file",
+      "neovim__write",
+      "neovim__edit",
+      "neovim__create",
+      "neovim__delete",
 
       -- GitHub 写操作
-      "github__create_issue",
-      "github__create_pull_request",
-      "github__create_or_update_file",
-      "github__delete_file",
+      "github__create",
+      "github__update",
+      "github__delete",
+      "github__push",
 
       -- 系统命令执行
       "cmd_runner",
     },
 
-    -- 自动批准规则
+    -- 动态自动批准规则
     rules = {
       {
         condition = function(params)
-          -- 如果工具在默认自动批准列表中
-          for _, tool in ipairs(M.get_config().default_auto_approve_tools) do
-            if params.tool_name == tool then
+          -- 如果工具匹配默认自动批准模式
+          for _, pattern in ipairs(M.get_config().default_auto_approve_patterns) do
+            if params.tool_name:find(pattern) then
               return true
             end
           end
           return false
         end,
         action = "auto_approve",
-        message = "工具在自动批准列表中"
+        message = "工具匹配自动批准模式"
       },
       {
         condition = function(params)
-          -- 如果工具在手动批准列表中
-          for _, tool in ipairs(M.get_config().manual_approval_tools) do
-            if params.tool_name == tool then
+          -- 如果工具匹配手动批准模式
+          for _, pattern in ipairs(M.get_config().manual_approval_patterns) do
+            if params.tool_name:find(pattern) then
               return true
             end
           end
@@ -116,6 +123,15 @@ function M.get_config()
         action = "auto_approve",
         message = "自动工具模式已启用"
       },
+      {
+        condition = function(params)
+          -- 动态工具：如果是新发现的工具，默认需要手动批准
+          local is_new_tool = params.tool_name:find("__") and not params.tool_name:find("neovim__") and not params.tool_name:find("github__")
+          return is_new_tool
+        end,
+        action = "manual_approval",
+        message = "新发现的工具需要手动批准"
+      }
     }
   }
 end
@@ -181,6 +197,48 @@ end
 function M.toggle_auto_approve_mode()
   local current = vim.g.codecompanion_auto_tool_mode or false
   M.set_auto_approve_mode(not current)
+end
+
+-- 动态添加工具批准规则
+function M.add_dynamic_approval_rule(tool_pattern, action, message)
+  local config = M.get_config()
+  
+  table.insert(config.rules, {
+    condition = function(params)
+      return params.tool_name:find(tool_pattern)
+    end,
+    action = action,
+    message = message
+  })
+  
+  vim.notify("已添加动态批准规则: " .. tool_pattern, vim.log.levels.INFO)
+end
+
+-- 从 MCP Hub 发现工具并更新批准规则
+function M.update_approval_rules_from_mcphub()
+  -- 这个函数会从 MCP Hub 获取工具列表
+  -- 并根据工具类型自动添加批准规则
+  
+  -- 在实际实现中，这里会调用 MCP Hub API
+  -- 目前只是示例
+  
+  vim.notify("正在从 MCP Hub 更新批准规则...", vim.log.levels.INFO)
+  
+  -- 示例：为常见工具类型添加规则
+  local common_rules = {
+    {"__read", "auto_approve", "只读工具自动批准"},
+    {"__get", "auto_approve", "获取工具自动批准"},
+    {"__list", "auto_approve", "列表工具自动批准"},
+    {"__create", "manual_approval", "创建工具需要手动批准"},
+    {"__delete", "manual_approval", "删除工具需要手动批准"},
+    {"__write", "manual_approval", "写入工具需要手动批准"},
+  }
+  
+  for _, rule in ipairs(common_rules) do
+    M.add_dynamic_approval_rule(rule[1], rule[2], rule[3])
+  end
+  
+  vim.notify("批准规则更新完成", vim.log.levels.INFO)
 end
 
 return M

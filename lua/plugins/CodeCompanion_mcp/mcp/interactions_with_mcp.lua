@@ -1,13 +1,13 @@
--- CodeCompanion 交互策略配置 - 包含 MCP 工具
+-- CodeCompanion 交互策略配置 - 包含动态 MCP 工具
 -- 文件：CodeCompanion/interactions_with_mcp.lua
--- 基础配置 + MCP 工具集成
+-- 基础配置 + 动态 MCP 工具集成
 
 local M = {}
 
 -- 导入基础配置
 local base_config = require("plugins.CodeCompanion_mcp.core.interactions_base").config
 
--- 导入 MCP 工具配置
+-- 导入动态 MCP 工具配置
 local mcp_config = require("plugins.CodeCompanion_mcp.config.mcp_tools_config")
 local mcp_tools_config = mcp_config.get_tools_config()
 
@@ -37,7 +37,7 @@ local function extract_section(text, start_marker, end_marker)
   end
 end
 
--- 深度合并配置
+-- 深度合并配置（支持动态工具）
 local function deep_merge_configs(base, mcp)
   local merged = vim.deepcopy(base)
 
@@ -89,7 +89,7 @@ local function deep_merge_configs(base, mcp)
 
       -- 如果不是基础工具组，或者基础工具组中没有定义，则添加
       if not is_base_group or not merged.chat.tools.groups[group_name] then
-        merged.chat.tools.groups[group_name] = tool_config
+        merged.chat.tools.groups[group_name] = group_config
       else
         -- 如果是基础工具组且已存在，可以记录日志但不覆盖
         if os.getenv("CODECOMPANION_DEBUG") then
@@ -212,19 +212,9 @@ local function deep_merge_configs(base, mcp)
     end
   end
 
-  -- 6. 添加 MCP Hub 自定义工具组
+  -- 6. 添加 MCP Hub 动态工具组
   local mcphub_integration = require("plugins.CodeCompanion_mcp.config.mcphub_integration")
-  local mcphub_tool_groups = mcphub_integration.get_custom_tool_groups()
-
-  if mcphub_tool_groups and mcphub_tool_groups.groups then
-    for group_name, group_config in pairs(mcphub_tool_groups.groups) do
-      merged.chat.tools.groups[group_name] = group_config
-    end
-  end
-
-  -- 6. 添加 MCP Hub 自定义工具组
-  local mcphub_integration = require("plugins.CodeCompanion_mcp.config.mcphub_integration")
-  local mcphub_tool_groups = mcphub_integration.get_custom_tool_groups()
+  local mcphub_tool_groups = mcphub_integration.get_dynamic_tool_groups()
 
   if mcphub_tool_groups and mcphub_tool_groups.groups then
     for group_name, group_config in pairs(mcphub_tool_groups.groups) do
@@ -245,6 +235,17 @@ local function deep_merge_configs(base, mcp)
     return messages
   end
 
+  -- 9. 添加动态工具发现钩子
+  merged.chat.on_tool_discovery = function()
+    -- 这个钩子会在工具发现时调用
+    -- 可以在这里更新工具列表
+    
+    -- 示例：记录工具发现事件
+    if os.getenv("CODECOMPANION_DEBUG") then
+      print("动态工具发现钩子被调用")
+    end
+  end
+
   return merged
 end
 
@@ -253,20 +254,23 @@ M.config = deep_merge_configs(base_config, mcp_tools_config)
 
 -- 调试：打印合并后的配置结构
 local function debug_config()
-  print("=== 配置合并完成 ===")
+  print("=== 动态配置合并完成 ===")
   print("默认工具数量:", #M.config.chat.tools.opts.default_tools)
   print("工具组数量:", #vim.tbl_keys(M.config.chat.tools.groups))
   print("工具数量:", #vim.tbl_keys(M.config.chat.tools))
 
   -- 检查关键工具是否存在
-  local key_tools = {"crawl4ai", "crawl4ai_crawl", "context7", "neovim", "github"}
+  local key_tools = {"use_mcp_tool", "mcphub"}
   for _, tool in ipairs(key_tools) do
     if M.config.chat.tools[tool] then
-      print("✓ 工具存在:", tool)
+      print("✓ 动态工具存在:", tool)
     else
-      print("✗ 工具缺失:", tool)
+      print("✗ 动态工具缺失:", tool)
     end
   end
+  
+  -- 检查动态工具配置
+  print("动态工具发现:", M.config.chat.tools.opts.system_prompt.prompt and "已配置" or "未配置")
 end
 
 -- 在开发模式下启用调试

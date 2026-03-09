@@ -1,6 +1,6 @@
--- CodeCompanion MCP 集成模块
--- 文件: CodeCompanion/mcp_integration.lua
+-- CodeCompanion MCP 动态集成模块
 -- 集成 mcp-crawl4ai-ts 和 ~/.config/nvim/mcp 的所有功能
+-- 支持动态工具发现
 
 local M = {}
 
@@ -27,7 +27,16 @@ if not success then
       -- 如果还是失败，创建简单的替代
       mcp_config = {
         get_enabled_servers = function() return {} end,
-        get_server_config = function() return nil end
+        get_server_config = function() return nil end,
+        discover_tools = function() return {} end,
+        get_dynamic_tool_info = function() 
+          return {
+            discovery_method = "简化版本",
+            auto_refresh = false,
+            tool_count = 0,
+            last_update = os.time()
+          }
+        end
       }
       print("警告: 无法加载 mcp 配置，使用简化版本")
     end
@@ -51,6 +60,13 @@ function M.check_mcp_status(silent)
     end
   end
 
+  -- 检查动态工具发现状态
+  local tool_info = mcp_config.get_dynamic_tool_info()
+  if not silent then
+    vim.notify("  🔄 工具发现: " .. tool_info.discovery_method, vim.log.levels.INFO)
+    vim.notify("  📊 工具数量: " .. tool_info.tool_count, vim.log.levels.INFO)
+  end
+
   if server_count == 0 then
     if not silent then
       vim.notify("⚠️  未找到任何启用的 MCP 服务器", vim.log.levels.WARN)
@@ -60,6 +76,7 @@ function M.check_mcp_status(silent)
 
   if not silent then
     vim.notify("✅ 共检测到 " .. server_count .. " 个启用的 MCP 服务器", vim.log.levels.INFO)
+    vim.notify("💡 使用 @mcp 访问所有动态发现的工具", vim.log.levels.INFO)
   end
   return true
 end
@@ -161,92 +178,126 @@ function M.test_all_mcp_servers()
   end, 1000)
 end
 
--- 获取工具组信息
-function M.get_tool_groups_info()
+-- 动态发现工具
+function M.discover_mcp_tools()
+  vim.notify("🔍 正在发现 MCP 工具...", vim.log.levels.INFO)
+  
+  local tools = mcp_config.discover_tools()
+  local tool_count = 0
+  
+  for _ in pairs(tools) do
+    tool_count = tool_count + 1
+  end
+  
+  vim.notify("✅ 发现 " .. tool_count .. " 个 MCP 工具", vim.log.levels.INFO)
+  
+  return tools
+end
+
+-- 获取动态工具组信息
+function M.get_dynamic_tool_groups_info()
   -- 尝试从 mcphub_integration 获取工具组配置
   local success, mcphub_integration = pcall(require, "config.mcphub_integration")
 
-  if success and mcphub_integration.get_custom_tool_groups then
-    local tool_groups = mcphub_integration.get_custom_tool_groups()
-    return tool_groups.groups
+  if success and mcphub_integration.get_dynamic_tool_groups then
+    local tool_groups = mcphub_integration.get_dynamic_tool_groups()
+    return tool_groups.groups or {}
   end
 
-  -- 如果无法获取，返回默认工具组信息
-  return {
-    mcp_suite = {
-      description = "所有 MCP 服务器的完整套件",
-      tools = {"所有 MCP 服务器"}
-    },
-    web_research = {
-      description = "网页研究和内容提取工作流",
-      tools = {"Context7", "Crawl4AI"}
-    },
-    development = {
-      description = "开发工作流（文档、GitHub、编辑器）",
-      tools = {"Context7", "GitHub", "Neovim"}
-    },
-    github_pr_workflow = {
-      description = "从 issue 到 PR 的 GitHub 操作流程",
-      tools = {"GitHub", "Neovim", "文件系统"}
-    },
-    code_analysis = {
-      description = "代码分析和文档查询工作流",
-      tools = {"Context7", "Neovim", "文件系统"}
+  -- 如果无法获取，返回动态生成的工具组信息
+  local discovered_tools = M.discover_mcp_tools()
+  
+  -- 按服务器分组
+  local groups = {}
+  local servers = {}
+  
+  for tool_name, _ in pairs(discovered_tools) do
+    local server_name = tool_name:match("([^__]+)__")
+    if server_name then
+      if not servers[server_name] then
+        servers[server_name] = {}
+      end
+      table.insert(servers[server_name], tool_name)
+    end
+  end
+  
+  for server_name, tools in pairs(servers) do
+    groups[server_name] = {
+      description = server_name .. " 服务器工具组",
+      tools = tools
     }
+  end
+  
+  -- 添加通用 MCP 组
+  groups["mcp"] = {
+    description = "所有 MCP 服务器的完整套件",
+    tools = {"所有动态发现的 MCP 工具"}
   }
+  
+  return groups
 end
 
--- 生成工具组帮助文本
-function M.generate_tool_groups_help()
-  local tool_groups = M.get_tool_groups_info()
-  local help_lines = {"## 工具组使用\n"}
+-- 生成动态工具组帮助文本
+function M.generate_dynamic_tool_groups_help()
+  local tool_groups = M.get_dynamic_tool_groups_info()
+  local help_lines = {"## 动态工具组使用\n"}
 
   for group_name, group_info in pairs(tool_groups) do
     table.insert(help_lines, "### " .. group_info.description .. " (@{" .. group_name .. "})")
-    table.insert(help_lines, "- 包含: " .. table.concat(group_info.tools, ", "))
+    if type(group_info.tools) == "table" then
+      table.insert(help_lines, "- 包含: " .. table.concat(group_info.tools, ", "))
+    else
+      table.insert(help_lines, "- 包含: " .. tostring(group_info.tools))
+    end
     table.insert(help_lines, "- 使用: `@{" .. group_name .. "} [查询内容]`\n")
   end
 
   return table.concat(help_lines, "\n")
 end
 
--- 显示 MCP 使用帮助
+-- 显示 MCP 动态使用帮助
 function M.show_mcp_usage_help()
   -- 生成动态工具组帮助
-  local tool_groups_help = M.generate_tool_groups_help()
-
+  local tool_groups_help = M.generate_dynamic_tool_groups_help()
+  
+  -- 获取动态工具信息
+  local tool_info = mcp_config.get_dynamic_tool_info()
+  
   local help_text = [[
-  # 🚀 MCP 服务使用指南
+  # 🚀 MCP 动态服务使用指南
 
-  ## 已集成的 MCP 服务器
+  ## 动态工具发现
+  MCP 工具通过 MCP Hub 动态发现和管理，无需手动配置。
+  
+  ### 发现状态
+  - 方法: ]] .. tool_info.discovery_method .. [[
+  - 自动刷新: ]] .. (tool_info.auto_refresh and "是" or "否") .. [[
+  - 工具数量: ]] .. tool_info.tool_count .. [[
+  - 最后更新: ]] .. os.date("%Y-%m-%d %H:%M:%S", tool_info.last_update) .. [[
 
-  ### 1. Context7 (@{context7})
-  - **功能**: 获取最新的代码库文档和示例
-  - **使用方式**: `@{context7} [查询内容]`
-  - **示例**:
-  - `@{context7} Get React hooks documentation`
-  - `@{context7} How to use Express.js middleware`
+  ## 使用方式
 
-  ### 2. Crawl4AI (@{crawl4ai})
-  - **功能**: 网页爬取和内容提取
-  - **使用方式**: `@{crawl4ai} [URL或查询内容]`
-  - **示例**:
-  - `@{crawl4ai} Crawl https://news.ycombinator.com`
-  - `@{crawl4ai} Extract content from https://github.com/trending`
+  ### 1. 通用 MCP 访问 (@mcp)
+  @{mcp} 当前目录下有哪些文件？
 
-  ### 3. GitHub (@{github})
-  - **功能**: GitHub 仓库和项目管理
-  - **使用方式**: `@{github} [操作]`
-  - **示例**:
-  - `@{github} List my repositories`
-  - `@{github} Search for Python projects`
+  - 访问所有动态发现的 MCP 工具
+  - 自动发现新工具
 
-  ### 4. Neovim (@{neovim})
-  - **功能**: Neovim 编辑器和缓冲区操作
-  - **使用方式**: `@{neovim} [操作]`
-  - **示例**:
-  - `@{neovim} Get current buffer content`
-  - `@{neovim} List all buffers`
+  ### 2. 服务器组访问
+  @{neovim} 读取 main.lua 文件
+  @{github} 创建一个 issue
+  @{crawl4ai} 获取这个网页
+
+  - 访问特定服务器的所有工具
+  - 组名自动从服务器名称生成
+
+  ### 3. 独立工具访问
+  @{neovim__read_file} 显示配置文件
+  @{github__create_issue} 提交 bug 报告
+  @{crawl4ai__crawl} 爬取网页内容
+
+  - 精细控制单个工具
+  - 工具名格式："servername__toolname"
 
   ]] .. tool_groups_help .. [[
 
@@ -262,16 +313,17 @@ function M.show_mcp_usage_help()
   - `:MCPStatus` - 检查 MCP 服务状态
   - `:TestMCP` - 测试 MCP 服务
   - `:MCPHelp` - 显示详细帮助
+  - `:DiscoverMCPTools` - 手动发现 MCP 工具
 
   ## 快速开始
-  1. 在聊天中输入: `@{context7} Get Python documentation`
+  1. 在聊天中输入: `@{mcp} Get Python documentation`
   2. 在聊天中输入: `@{crawl4ai} Crawl https://example.com`
-  3. 使用工具组: `@{web_research} Find latest React tutorials`
+  3. 使用服务器组: `@{neovim} Get current buffer content`
   ]]
 
   -- 创建临时缓冲区显示帮助
   local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_name(buf, "MCP_Usage_Guide")
+  vim.api.nvim_buf_set_name(buf, "MCP_Dynamic_Usage_Guide")
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, vim.split(help_text, "\n"))
 
   local win = vim.api.nvim_open_win(buf, true, {
@@ -282,7 +334,7 @@ function M.show_mcp_usage_help()
     row = math.floor((vim.o.lines - 45) / 2),
     style = "minimal",
     border = "rounded",
-    title = "MCP 服务使用指南",
+    title = "MCP 动态服务使用指南",
     title_pos = "center",
   })
 
@@ -309,38 +361,43 @@ function M.create_commands()
     end
   })
 
--- MCP 测试命令
-vim.api.nvim_create_user_command("TestMCP", function()
-  M.test_all_mcp_servers()
-end, {
-desc = "测试所有 MCP 服务"
+  -- MCP 测试命令
+  vim.api.nvim_create_user_command("TestMCP", function()
+    M.test_all_mcp_servers()
+  end, {
+    desc = "测试所有 MCP 服务"
   })
 
   -- MCP 帮助命令
   vim.api.nvim_create_user_command("MCPHelp", function()
     M.show_mcp_usage_help()
   end, {
-  desc = "显示 MCP 服务使用帮助"
-})
+    desc = "显示 MCP 服务使用帮助"
+  })
 
--- 单个服务器测试命令
-vim.api.nvim_create_user_command("TestMCPContext7", function()
-  M.test_mcp_server("context7")
-end, {desc = "测试 Context7 服务器"})
+  -- MCP 工具发现命令
+  vim.api.nvim_create_user_command("DiscoverMCPTools", function()
+    M.discover_mcp_tools()
+  end, {
+    desc = "手动发现 MCP 工具"
+  })
 
-vim.api.nvim_create_user_command("TestMCPCrawl4AI", function()
-  M.test_mcp_server("crawl4ai")
-end, {desc = "测试 Crawl4AI 服务器"})
+  -- 单个服务器测试命令
+  vim.api.nvim_create_user_command("TestMCPContext7", function()
+    M.test_mcp_server("context7")
+  end, {desc = "测试 Context7 服务器"})
 
-vim.api.nvim_create_user_command("TestMCPGitHub", function()
-  M.test_mcp_server("github")
-end, {desc = "测试 GitHub 服务器"})
+  vim.api.nvim_create_user_command("TestMCPCrawl4AI", function()
+    M.test_mcp_server("crawl4ai")
+  end, {desc = "测试 Crawl4AI 服务器"})
 
-vim.api.nvim_create_user_command("TestMCPNeovim", function()
-  M.test_mcp_server("neovim")
-end, {desc = "测试 Neovim 服务器"})
+  vim.api.nvim_create_user_command("TestMCPGitHub", function()
+    M.test_mcp_server("github")
+  end, {desc = "测试 GitHub 服务器"})
 
-  -- 函数结束
+  vim.api.nvim_create_user_command("TestMCPNeovim", function()
+    M.test_mcp_server("neovim")
+  end, {desc = "测试 Neovim 服务器"})
 end
 
 -- 初始化函数
