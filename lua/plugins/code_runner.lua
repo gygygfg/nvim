@@ -2,19 +2,19 @@ return {
   "CRAG666/code_runner.nvim",
   config = function()
     -- 导入虚拟环境检测模块
-    local nvim_venv = require('nvim_venv')
-    
+    local nvim_venv = require('python_venv')
+
     -- 初始化虚拟环境检测
     nvim_venv.setup()
-    
+
     -- 获取当前Python路径
     local python_info = nvim_venv.get_python_info()
     local python_cmd = "python3 -u"
-    
+
     if not python_info.error then
       python_cmd = python_info.path .. " -u"
     end
-    
+
     require('code_runner').setup({
       filetype = {
         java = {
