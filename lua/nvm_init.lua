@@ -122,8 +122,7 @@ function M.setup()
     local node_info = get_nvm_node_info()
 
     if not node_info then
-      vim.notify("No NVM-managed Node.js found. Using system Node if available.", 
-      vim.log.levels.WARN)
+      vim.notify("No NVM-managed Node.js found. Using system Node if available.",vim.log.levels.INFO)
 
       -- 检查系统 Node
       local success, msg = verify_setup()
