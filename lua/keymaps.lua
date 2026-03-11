@@ -139,6 +139,20 @@ function M.mason()
       vim.notify("ast-grep LSP 已加载", vim.log.levels.INFO)
     end, 100)
   end
+  
+  -- LSP格式化快捷键
+  _set_keymap('n', '<leader>lf', function()
+    vim.lsp.buf.format({
+      async = false,
+      filter = function(client)
+        return client.supports_method("textDocument/formatting")
+      end
+    })
+    vim.notify("已使用LSP格式化", vim.log.levels.INFO, {
+      title = "格式化",
+      timeout = 2000,
+    })
+  end, { desc = "使用LSP格式化当前缓冲区" })
 end
 
 function M.nvim_tree()

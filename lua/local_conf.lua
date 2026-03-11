@@ -110,7 +110,7 @@ vim.api.nvim_create_autocmd("BufWritePre", {
   pattern = "*",
   callback = function()
     local filetype = vim.bo.filetype
-    local sensitive_filetypes = { "yaml", "python", "yml", "py", "dockerfile" } -- 添加 dockerfile
+    local sensitive_filetypes = { "yaml", "python", "yml", "py", "dockerfile" } -- 缩进敏感的文件
     local is_sensitive = false
     for _, ft in ipairs(sensitive_filetypes) do
       if filetype == ft then
@@ -118,6 +118,51 @@ vim.api.nvim_create_autocmd("BufWritePre", {
         break
       end
     end
+    
+    -- 检查是否有可用的LSP格式化功能
+    local function has_lsp_formatting()
+      local clients = vim.lsp.get_clients({ bufnr = 0 })
+      for _, client in ipairs(clients) do
+        if client.supports_method("textDocument/formatting") then
+          return true
+        end
+      end
+      return false
+    end
+    
+    -- LSP格式化函数
+    local function formatWithLSP(show_msg)
+      local has_formatting = has_lsp_formatting()
+      if has_formatting then
+        -- 保存光标位置
+        local save_cursor = vim.fn.getpos(".")
+        
+        -- 使用LSP格式化
+        vim.lsp.buf.format({
+          async = false, -- 同步格式化，确保在保存前完成
+          filter = function(client)
+            -- 只使用支持格式化的客户端
+            return client.supports_method("textDocument/formatting")
+          end
+        })
+        
+        -- 恢复光标位置
+        vim.fn.setpos(".", save_cursor)
+        
+        if show_msg then
+          vim.defer_fn(function()
+            vim.notify("已使用LSP格式化", vim.log.levels.INFO, {
+              title = "格式化",
+              timeout = 2000,
+            })
+          end, 100)
+        end
+        return true
+      end
+      return false
+    end
+    
+    -- 原有的gg=G格式化函数
     local function formatWithGG(show_msg)
       if not is_sensitive then
         local save_cursor = vim.fn.getpos(".")
@@ -133,8 +178,12 @@ vim.api.nvim_create_autocmd("BufWritePre", {
         end
       end
     end
-    -- 简化：总是使用 gg=G 格式化，避免LSP API调用问题
-    formatWithGG(true)
+    
+    -- 优先使用LSP格式化，如果不可用则使用gg=G
+    local lsp_success = formatWithLSP(true)
+    if not lsp_success then
+      formatWithGG(true)
+    end
   end,
 })
 
