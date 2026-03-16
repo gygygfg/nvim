@@ -11,13 +11,34 @@ return {
     -- 然后设置 nonicons
     require('nvim-nonicons').setup()
     
-    -- 加载 nvim-tree 扩展（注意拼写：extensions 不是 extentions）
-    local nonicons_extension = require("nvim-nonicons.extensions.nvim-tree")
-    
     require("nvim-tree").setup({
       renderer = {
         icons = {
-          glyphs = nonicons_extension.glyphs,
+          glyphs = {
+            default = "📄",
+            symlink = "🔗",
+            bookmark = "🔖",
+            modified = "●",
+            folder = {
+              arrow_closed = "▶",
+              arrow_open = "▼",
+              default = "📁",
+              open = "📂",
+              empty = "📁",
+              empty_open = "📂",
+              symlink = "🔗",
+              symlink_open = "🔗",
+            },
+            git = {
+              unstaged = "✗",
+              staged = "✓",
+              unmerged = "⌥",
+              renamed = "➜",
+              untracked = "★",
+              deleted = "✖",
+              ignored = "◌",
+            },
+          },
         },
       },
     })
