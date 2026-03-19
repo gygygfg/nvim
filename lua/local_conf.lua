@@ -1,5 +1,8 @@
 local opt = vim.opt
 
+-- 禁用粘贴时的自动缩进
+opt.paste = true
+
 -- 显示行号
 opt.number = true
 -- 显示相对行号
@@ -118,7 +121,7 @@ vim.api.nvim_create_autocmd("BufWritePre", {
         break
       end
     end
-    
+
     -- 检查是否有可用的LSP格式化功能
     local function has_lsp_formatting()
       local clients = vim.lsp.get_clients({ bufnr = 0 })
@@ -129,14 +132,14 @@ vim.api.nvim_create_autocmd("BufWritePre", {
       end
       return false
     end
-    
+
     -- LSP格式化函数
     local function formatWithLSP(show_msg)
       local has_formatting = has_lsp_formatting()
       if has_formatting then
         -- 保存光标位置
         local save_cursor = vim.fn.getpos(".")
-        
+
         -- 使用LSP格式化
         vim.lsp.buf.format({
           async = false, -- 同步格式化，确保在保存前完成
@@ -145,10 +148,10 @@ vim.api.nvim_create_autocmd("BufWritePre", {
             return client.supports_method("textDocument/formatting")
           end
         })
-        
+
         -- 恢复光标位置
         vim.fn.setpos(".", save_cursor)
-        
+
         if show_msg then
           vim.defer_fn(function()
             vim.notify("已使用LSP格式化", vim.log.levels.INFO, {
@@ -161,7 +164,7 @@ vim.api.nvim_create_autocmd("BufWritePre", {
       end
       return false
     end
-    
+
     -- 原有的gg=G格式化函数
     local function formatWithGG(show_msg)
       if not is_sensitive then
@@ -178,7 +181,7 @@ vim.api.nvim_create_autocmd("BufWritePre", {
         end
       end
     end
-    
+
     -- 优先使用LSP格式化，如果不可用则使用gg=G
     local lsp_success = formatWithLSP(true)
     if not lsp_success then
@@ -214,7 +217,7 @@ vim.opt.formatoptions:remove("t") -- 不要自动格式化文本
 vim.opt.formatoptions:append("c") -- 自动格式化注释
 vim.opt.formatoptions:append("q") -- 允许使用 gq 格式化注释
 vim.opt.formatoptions:remove("o") -- 不要在使用 o 或 O 时自动插入注释
-vim.opt.formatoptions:append("r") -- 在回车时继续注释
+vim.opt.formatoptions:remove("r") -- 不要在回车时继续注释
 vim.opt.formatoptions:append("n") -- 识别编号列表
 vim.opt.formatoptions:append("j") -- 在合适的地方删除注释前缀
 
