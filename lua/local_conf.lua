@@ -326,8 +326,8 @@ vim.notify = function(msg, level, opts)
       "Press ENTER or type command to continue",
       "Reloading",
       "配置已更改",
-      "重新加载"
-
+      "重新加载",
+      "提交成功:"
     }
 
     for _, keyword in ipairs(config_change_keywords) do
