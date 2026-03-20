@@ -2,14 +2,12 @@ local M = {}
 
 -- 导入 git commit 模块
 local git_commit = require("plugins.git.commit")
-
 local function _set_keymap(mode, lhs, rhs, opts)
   opts = opts or { noremap = true, silent = true }
   vim.keymap.set(mode, lhs, rhs, opts)
 end
-
--- 智能 Git 错误处理函数
 local function smart_git_error_handler(data, error_type)
+  -- 智能 Git 错误处理函数
   if not data or #data == 0 then
     return
   end
@@ -76,6 +74,24 @@ function M.main()
 
   -- 取消高亮
   _set_keymap("n", "<leader>h", ":nohl<CR>")
+
+  _set_keymap('n', '<F2>', function()
+    -- 使用快捷键手动切换 paste 模式
+    vim.o.paste = not vim.o.paste
+    if vim.o.paste then
+      vim.notify('粘贴模式已启用 (按 F2 关闭)', vim.log.levels.INFO, { 
+        title = '粘贴模式', 
+        timeout = 2000 
+      })
+    else
+      vim.notify('粘贴模式已禁用', vim.log.levels.INFO, { 
+        title = '粘贴模式', 
+        timeout = 1500 
+      })
+    end
+  end, { desc = '切换粘贴模式' })
+  -- 可选：设置快捷键
+  -- vim.keymap.set('n', '<leader>vp', ':Paste<CR>', { silent = true, desc = '启用粘贴模式' })
 end
 
 function M.ufo()
@@ -139,7 +155,7 @@ function M.mason()
       vim.notify("ast-grep LSP 已加载", vim.log.levels.INFO)
     end, 100)
   end
-  
+
   -- LSP格式化快捷键
   _set_keymap('n', '<leader>lf', function()
     vim.lsp.buf.format({

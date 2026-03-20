@@ -1,7 +1,8 @@
 local opt = vim.opt
 
--- 禁用粘贴时的自动缩进
-opt.paste = true
+-- 不要全局启用粘贴模式，它会禁用补全功能
+-- 改为使用自动命令在需要时启用粘贴模式
+opt.paste = false
 
 -- 显示行号
 opt.number = true
@@ -245,14 +246,43 @@ opt.foldminlines = 1
 -- 搜索
 opt.ignorecase = true
 opt.smartcase = true
--- 关闭自动注释
-vim.api.nvim_command("set formatoptions-=ro")
+vim.api.nvim_create_autocmd('InsertEnter', {
+  -- 检测剪贴板中的文本长度，如果很长则提示使用 paste 模式
+  callback = function()
+    local clipboard = vim.fn.getreg('+')
+    if clipboard and #clipboard > 200 then  -- 超过200个字符
+      vim.defer_fn(function()
+        vim.notify('检测到大段文本，按 F2 可切换 paste 模式避免缩进问题', 
+        vim.log.levels.INFO, { 
+          title = '粘贴提示', 
+          timeout = 3000 
+        })
+      end, 100)
+    end
+  end,
+})
 
--- 关闭写入提示
--- vim.opt.writebackup = false
--- vim.g.rooter_silent_chdir = 1
--- vim.g.shortmess=a
--- vim.g.cmdheight=2
+vim.api.nvim_create_user_command('Paste', function()
+  -- 4. 提供简单的 :Paste 命令
+  vim.o.paste = true
+  vim.notify('已启用 paste 模式，粘贴完成后会自动关闭', 
+  vim.log.levels.INFO, { 
+    title = '粘贴模式', 
+    timeout = 2000 
+  })
+  -- 插入模式离开后自动关闭 paste 模式
+  vim.api.nvim_create_autocmd('InsertLeave', {
+    once = true,
+    callback = function()
+      vim.o.paste = false
+      vim.notify('已自动关闭 paste 模式', 
+      vim.log.levels.INFO, { 
+        title = '粘贴模式', 
+        timeout = 1500 
+      })
+    end,
+  })
+end,{ desc = '启用 paste 模式进行粘贴' })
 
 -- 确保状态行显示
 vim.opt.laststatus = 2  -- 总是显示状态行
@@ -260,121 +290,120 @@ vim.opt.showmode = true  -- 显示当前模式
 vim.opt.ruler = true     -- 显示光标位置
 
 
--- 简化诊断提示（注释掉有问题的配置）
--- vim.diagnostic.config({
-  --   virtual_text = { 
-    --     enabled = false,  -- 禁用行内诊断提示
-    --     prefix = "■" 
-    --   }, 
-    --   float = { 
-      --     border = "none" 
-      --   } 
-      -- })
-      -- 关闭悬浮文档（手机端不易触达）
-      -- vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(
-        --   vim.lsp.handlers.hover, { border = "none" }
-        -- )
+vim.diagnostic.config({
+  -- 简化诊断提示
+  virtual_text = { 
+    enabled = false,  -- 禁用行内诊断提示
+    prefix = "■" 
+  }, 
+  float = { 
+    border = "none" 
+  } 
+})
+vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(
+  -- 关闭悬浮文档（手机端不易触达）
+  vim.lsp.handlers.hover, { border = "none" }
+)
 
-        -- ==================== 全局配置更改提示禁用 ====================
-        -- 禁用所有配置更改检测提示，避免干扰
+-- ==================== 全局配置更改提示禁用 ====================
+-- 禁用所有配置更改检测提示，避免干扰
 
-        -- 设置全局变量，禁用配置更改提示
-        vim.g.disable_config_change_prompt = true
-        vim.g.silent_config_reload = true
+-- 设置全局变量，禁用配置更改提示
+vim.g.disable_config_change_prompt = true
+vim.g.silent_config_reload = true
 
-        -- 设置静默模式
-        vim.o.shortmess = vim.o.shortmess .. "s"  -- 添加静默标志
+-- 设置静默模式
+vim.o.shortmess = vim.o.shortmess .. "s"  -- 添加静默标志
 
-        -- 全局拦截配置更改消息
-        local original_notify = vim.notify
-        vim.notify = function(msg, level, opts)
-          -- 过滤掉配置更改相关的提示
-          if type(msg) == "string" then
-            -- 检查是否包含配置更改相关关键词
-            local config_change_keywords = {
-              "Config Change Detected",
-              "Press ENTER or type command to continue",
-              "Reloading",
-              "配置已更改",
-              "重新加载"
-            }
+-- 全局拦截配置更改消息
+local original_notify = vim.notify
+vim.notify = function(msg, level, opts)
+  -- 过滤掉配置更改相关的提示
+  if type(msg) == "string" then
+    -- 检查是否包含配置更改相关关键词
+    local config_change_keywords = {
+      "Config Change Detected",
+      "Press ENTER or type command to continue",
+      "Reloading",
+      "配置已更改",
+      "重新加载"
+    }
 
-            for _, keyword in ipairs(config_change_keywords) do
-              if string.find(msg, keyword) then
-                -- 静默处理，不显示提示
-                return
-              end
-            end
-          end
+    for _, keyword in ipairs(config_change_keywords) do
+      if string.find(msg, keyword) then
+        -- 静默处理，不显示提示
+        return
+      end
+    end
+  end
 
-          -- 调用原始的通知函数
-          return original_notify(msg, level, opts)
-        end
+  -- 调用原始的通知函数
+  return original_notify(msg, level, opts)
+end
 
-        -- 禁用所有插件配置更改提示
-        vim.api.nvim_create_autocmd("User", {
-          pattern = "LazyReload",
-          callback = function()
-            -- 静默处理 Lazy.nvim 的重载
-            vim.cmd("silent! echo ''")
-            vim.cmd("redraw")
-          end,
-          group = vim.api.nvim_create_augroup("GlobalSilentLazyReload", { clear = true })
-        })
+-- 禁用所有插件配置更改提示
+vim.api.nvim_create_autocmd("User", {
+  pattern = "LazyReload",
+  callback = function()
+    -- 静默处理 Lazy.nvim 的重载
+    vim.cmd("silent! echo ''")
+    vim.cmd("redraw")
+  end,
+  group = vim.api.nvim_create_augroup("GlobalSilentLazyReload", { clear = true })
+})
 
-        -- 通用配置文件更改静默处理
-        vim.api.nvim_create_autocmd("BufWritePost", {
-          pattern = "*.lua",
-          callback = function(args)
-            local filename = vim.fn.fnamemodify(args.file, ":t")
+-- 通用配置文件更改静默处理
+vim.api.nvim_create_autocmd("BufWritePost", {
+  pattern = "*.lua",
+  callback = function(args)
+    local filename = vim.fn.fnamemodify(args.file, ":t")
 
-            -- 检查是否是配置文件
-            local config_files = {
-              "codecompanion.lua",
-              "local_conf.lua",
-              "keymaps.lua",
-              "nvim_venv.lua",
-              "init.lua"
-            }
+    -- 检查是否是配置文件
+    local config_files = {
+      "codecompanion.lua",
+      "local_conf.lua",
+      "keymaps.lua",
+      "nvim_venv.lua",
+      "init.lua"
+    }
 
-            for _, config_file in ipairs(config_files) do
-              if filename == config_file then
-                -- 静默处理配置文件更新
-                vim.defer_fn(function()
-                  vim.notify(filename .. " 配置已更新", vim.log.levels.INFO, { 
-                    title = "配置更新",
-                    timeout = 1000, -- 1秒后自动消失
-                    hide_from_history = true -- 不保存到历史
-                  })
-                end, 100)
+    for _, config_file in ipairs(config_files) do
+      if filename == config_file then
+        -- 静默处理配置文件更新
+        vim.defer_fn(function()
+          vim.notify(filename .. " 配置已更新", vim.log.levels.INFO, { 
+            title = "配置更新",
+            timeout = 1000, -- 1秒后自动消失
+            hide_from_history = true -- 不保存到历史
+          })
+        end, 100)
 
-                -- 防止显示 "Press ENTER or type command to continue" 提示
-                vim.cmd("silent! echo ''")
-                vim.cmd("redraw")
-                break
-              end
-            end
-          end,
-          group = vim.api.nvim_create_augroup("GlobalSilentConfigReload", { clear = true })
-        })
+        -- 防止显示 "Press ENTER or type command to continue" 提示
+        vim.cmd("silent! echo ''")
+        vim.cmd("redraw")
+        break
+      end
+    end
+  end,
+  group = vim.api.nvim_create_augroup("GlobalSilentConfigReload", { clear = true })
+})
 
-        -- 覆盖可能的配置更改检测函数
-        local function silent_config_change_handler()
-          -- 什么都不做，静默处理
-          return true
-        end
+if vim.g.config_change_detected then
+  -- 尝试覆盖常见的配置更改检测
+  local function silent_config_change_handler()
+    -- 覆盖可能的配置更改检测函数
+    -- 什么都不做，静默处理
+    return true
+  end
+  vim.g.config_change_detected = silent_config_change_handler
+end
 
-        -- 尝试覆盖常见的配置更改检测
-        if vim.g.config_change_detected then
-          vim.g.config_change_detected = silent_config_change_handler
-        end
+-- 设置更激进的静默选项
+-- vim.opt.cmdheight = 1  -- 减少命令高度
+-- vim.opt.showcmd = false  -- 不显示命令
+-- vim.opt.ruler = false  -- 不显示标尺
 
-        -- 设置更激进的静默选项
-        vim.opt.cmdheight = 1  -- 减少命令高度
-        vim.opt.showcmd = false  -- 不显示命令
-        vim.opt.ruler = false  -- 不显示标尺
-
-        -- 禁用写入备份提示
-        vim.opt.writebackup = false
-        vim.opt.backup = false
+-- 禁用写入备份提示
+vim.opt.writebackup = false
+vim.opt.backup = false
 
