@@ -327,7 +327,8 @@ vim.notify = function(msg, level, opts)
       "Reloading",
       "配置已更改",
       "重新加载",
-      "提交成功:"
+      "提交成功:",
+      "Git:"
     }
 
     for _, keyword in ipairs(config_change_keywords) do
