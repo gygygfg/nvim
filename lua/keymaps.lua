@@ -49,6 +49,33 @@ local function smart_git_error_handler(data, error_type)
     "^Reusing existing pack"
   }
 
+  -- 错误模式：识别真正的错误信息
+  local error_patterns = {
+    "error: cannot pull with rebase",
+    "error: You have unstaged changes",
+    "fatal:",
+    "error:",
+    "conflict",
+    "CONFLICT",
+    "merge conflict",
+    "Automatic merge failed"
+  }
+
+  -- 首先检查是否是真正的错误
+  local is_error = false
+  for _, pattern in ipairs(error_patterns) do
+    if stderr_text:match(pattern) then
+      is_error = true
+      break
+    end
+  end
+
+  -- 如果是错误，直接显示为错误
+  if is_error then
+    vim.notify(error_type .. ": " .. stderr_text, vim.log.levels.ERROR)
+    return
+  end
+
   -- 检查是否匹配任何正常模式
   for _, pattern in ipairs(normal_patterns) do
     if stderr_text:match(pattern) then
@@ -61,8 +88,8 @@ local function smart_git_error_handler(data, error_type)
   if is_normal_git_output then
     vim.notify("Git: " .. stderr_text, vim.log.levels.INFO)
   else
-    -- 否则显示为真正的错误
-    vim.notify(error_type .. ": " .. stderr_text, vim.log.levels.ERROR)
+    -- 否则显示为警告（可能是未知的输出）
+    vim.notify(error_type .. ": " .. stderr_text, vim.log.levels.WARN)
   end
 end
 
@@ -527,10 +554,44 @@ function M.fugitive()
 
     local branch = branch_output
 
-    -- 检查是否有未提交的更改
-    local status = vim.fn.system("git status --porcelain")
+    -- 检查是否有未提交的更改（包括未暂存和已暂存的）
+    local status_cmd = "git status --porcelain"
+    local status = vim.fn.system(status_cmd)
+
+    -- 调试：显示状态输出
+    -- print("Git status output:", status)
+
     if status ~= "" then
-      vim.notify("⚠️  有未提交的更改，请先提交或暂存", vim.log.levels.WARN)
+      -- 解析状态输出，提供更详细的提示
+      local lines = vim.split(status, "\n")
+      local changes = {}
+
+      for _, line in ipairs(lines) do
+        if line ~= "" then
+          local status_code = line:sub(1, 2)
+          local filename = line:sub(4)
+
+          local status_desc = ""
+          if status_code:match("^[MARC]") then
+            status_desc = "已暂存: "
+          elseif status_code:match("^.[MDARCU?]") then
+            status_desc = "未暂存: "
+          end
+
+          table.insert(changes, status_desc .. filename)
+        end
+      end
+
+      local change_count = #changes
+      local message = "⚠️  有 " .. change_count .. " 个未提交的更改，请先提交或暂存"
+
+      if change_count <= 3 then
+        message = message .. ":\n" .. table.concat(changes, "\n")
+      else
+        message = message .. "（前3个）:\n" .. table.concat({unpack(changes, 1, 3)}, "\n") .. "\n... 还有 " .. (change_count - 3) .. " 个文件"
+      end
+
+      vim.notify(message, vim.log.levels.WARN)
       return
     end
 
