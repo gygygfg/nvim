@@ -104,6 +104,12 @@ function M.setup(opts)
   package.path = package.path .. ";" .. current_dir .. "/?.lua"
   package.path = package.path .. ";" .. current_dir .. "/?/init.lua"
 
+  -- 添加 codecompanion._extensions 命名空间支持
+  package.path = package.path .. ";" .. current_dir .. "/extensions/?.lua"
+  package.preload["codecompanion._extensions.custom_mcp_tools"] = function()
+    return require("plugins.CodeCompanion_mcp.extensions.custom_mcp_tools")
+  end
+
   -- 调试信息（已注释）
   -- vim.notify("设置包路径，当前目录: " .. current_dir, vim.log.levels.DEBUG)
 
@@ -123,21 +129,35 @@ function M.setup(opts)
   -- Initialize the main plugin if available
   local plugin_success, codecompanion = pcall(require, "codecompanion")
   if plugin_success then
-    codecompanion.setup(opts)
+    -- 设置一个延迟，确保插件完全初始化
+    vim.defer_fn(function()
+      codecompanion.setup(opts)
+
+      -- 延迟设置按键绑定，确保所有模块都已加载
+      vim.defer_fn(function()
+        local keymap_success, err = pcall(function()
+          local keymaps = require("keymaps")
+          if keymaps and keymaps.codecompanion then
+            local cc_keymaps = keymaps.codecompanion()
+            if cc_keymaps and cc_keymaps.setup then
+              cc_keymaps.setup()
+              -- vim.notify("✅ CodeCompanion 键盘映射设置成功", vim.log.levels.INFO)
+            else
+              vim.notify("⚠️  CodeCompanion 键盘映射结构不正确", vim.log.levels.WARN)
+            end
+          else
+            vim.notify("⚠️  未找到键盘映射模块", vim.log.levels.WARN)
+          end
+        end)
+
+        if not keymap_success then
+          vim.notify("加载 CodeCompanion 快捷键映射时出错：" .. tostring(err), vim.log.levels.ERROR)
+        end
+      end, 100) -- 延迟 100ms
+    end, 50) -- 延迟 50ms
   else
     vim.notify("⚠️  未找到主 codecompanion.nvim 插件。请确保已安装。", vim.log.levels.WARN)
     vim.notify("💡  Install with: git clone https://github.com/olimorris/codecompanion.nvim ~/.local/share/nvim/lazy/codecompanion.nvim", vim.log.levels.INFO)
-  end
-
-  -- 设置按键绑定，捕获可能的错误
-  local keymap_success, err = pcall(function()
-    local keymaps = require("keymaps")
-    if keymaps and keymaps.codecompanion then
-      keymaps.codecompanion().setup()
-    end
-  end)
-  if not keymap_success then
-    vim.notify("加载 CodeCompanion 快捷键映射时出错：" .. tostring(err), vim.log.levels.ERROR)
   end
 
   -- 命令缩写
