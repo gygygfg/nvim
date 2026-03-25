@@ -400,11 +400,6 @@ if vim.g.config_change_detected then
   vim.g.config_change_detected = silent_config_change_handler
 end
 
--- 设置更激进的静默选项
--- vim.opt.cmdheight = 1  -- 减少命令高度
--- vim.opt.showcmd = false  -- 不显示命令
--- vim.opt.ruler = false  -- 不显示标尺
-
 -- 禁用写入备份提示
 vim.opt.writebackup = false
 vim.opt.backup = false

@@ -126,9 +126,9 @@ function M.setup()
 
       -- 检查系统 Node
       local success, msg = verify_setup()
-      if success then
-        vim.notify("Using system: " .. msg, vim.log.levels.INFO)
-      end
+      -- if success then
+      --   vim.notify("Using system: " .. msg, vim.log.levels.INFO)
+      -- end
       return
     end
 
