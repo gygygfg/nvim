@@ -98,17 +98,11 @@ function M.setup(opts)
   -- 设置包路径，确保模块可以正确加载
   -- 使用基于家目录的动态路径
   local home_dir = vim.fn.expand("~")
-  local current_dir = home_dir .. "/.config/nvim/lua/plugins/CodeCompanion_mcp"
+  local current_dir = home_dir .. "/.config/nvim/lua/plugins/CodeCompanion"
 
   -- 将当前插件目录添加到包路径
   package.path = package.path .. ";" .. current_dir .. "/?.lua"
   package.path = package.path .. ";" .. current_dir .. "/?/init.lua"
-
-  -- 添加 codecompanion._extensions 命名空间支持
-  package.path = package.path .. ";" .. current_dir .. "/extensions/?.lua"
-  package.preload["codecompanion._extensions.custom_mcp_tools"] = function()
-    return require("plugins.CodeCompanion_mcp.extensions.custom_mcp_tools")
-  end
 
   -- 调试信息（已注释）
   -- vim.notify("设置包路径，当前目录: " .. current_dir, vim.log.levels.DEBUG)
@@ -117,10 +111,10 @@ function M.setup(opts)
   local mcphub_success, mcphub = pcall(require, "mcphub")
   if mcphub_success and mcphub then
     mcphub.setup({
-      auto_approve = true, -- 自动批准所有 MCP 工具调用
+      auto_approve = true,                              -- 自动批准所有 MCP 工具调用
       config_dir = vim.fn.expand("~/.config/nvim/mcp"), -- MCP 配置文件目录
     })
-    vim.notify("✅ MCP Hub 初始化成功", vim.log.levels.INFO)
+    -- vim.notify("✅ MCP Hub 初始化成功", vim.log.levels.INFO)
   else
     vim.notify("⚠️  MCP Hub 未找到，MCP 功能可能不可用", vim.log.levels.WARN)
     vim.notify("💡 请确保已安装 ravitemer/mcphub.nvim 插件", vim.log.levels.INFO)
@@ -129,35 +123,23 @@ function M.setup(opts)
   -- Initialize the main plugin if available
   local plugin_success, codecompanion = pcall(require, "codecompanion")
   if plugin_success then
-    -- 设置一个延迟，确保插件完全初始化
-    vim.defer_fn(function()
-      codecompanion.setup(opts)
-
-      -- 延迟设置按键绑定，确保所有模块都已加载
-      vim.defer_fn(function()
-        local keymap_success, err = pcall(function()
-          local keymaps = require("keymaps")
-          if keymaps and keymaps.codecompanion then
-            local cc_keymaps = keymaps.codecompanion()
-            if cc_keymaps and cc_keymaps.setup then
-              cc_keymaps.setup()
-              -- vim.notify("✅ CodeCompanion 键盘映射设置成功", vim.log.levels.INFO)
-            else
-              vim.notify("⚠️  CodeCompanion 键盘映射结构不正确", vim.log.levels.WARN)
-            end
-          else
-            vim.notify("⚠️  未找到键盘映射模块", vim.log.levels.WARN)
-          end
-        end)
-
-        if not keymap_success then
-          vim.notify("加载 CodeCompanion 快捷键映射时出错：" .. tostring(err), vim.log.levels.ERROR)
-        end
-      end, 100) -- 延迟 100ms
-    end, 50) -- 延迟 50ms
+    codecompanion.setup(opts)
   else
     vim.notify("⚠️  未找到主 codecompanion.nvim 插件。请确保已安装。", vim.log.levels.WARN)
-    vim.notify("💡  Install with: git clone https://github.com/olimorris/codecompanion.nvim ~/.local/share/nvim/lazy/codecompanion.nvim", vim.log.levels.INFO)
+    vim.notify(
+      "💡  Install with: git clone https://github.com/olimorris/codecompanion.nvim ~/.local/share/nvim/lazy/codecompanion.nvim",
+      vim.log.levels.INFO)
+  end
+
+  -- 设置按键绑定，捕获可能的错误
+  local keymap_success, err = pcall(function()
+    local keymaps = require("keymaps")
+    if keymaps and keymaps.codecompanion then
+      keymaps.codecompanion().setup()
+    end
+  end)
+  if not keymap_success then
+    vim.notify("加载 CodeCompanion 快捷键映射时出错：" .. tostring(err), vim.log.levels.ERROR)
   end
 
   -- 命令缩写
@@ -200,7 +182,7 @@ function M.setup(opts)
 
   -- 方法2：如果方法1失败，尝试使用 require
   if not mcp_integration_success then
-    mcp_integration_success, mcp_integration = pcall(require, "plugins.CodeCompanion_mcp.mcp.mcp_integration")
+    mcp_integration_success, mcp_integration = pcall(require, "plugins.CodeCompanion.mcp.mcp_integration")
   end
 
   -- 方法3：如果方法2失败，尝试相对路径
@@ -214,7 +196,7 @@ function M.setup(opts)
     end)
 
     if setup_success then
-      vim.notify("✅ MCP 集成模块初始化成功", vim.log.levels.INFO)
+      -- vim.notify("✅ MCP 集成模块初始化成功", vim.log.levels.INFO)
     else
       vim.notify("⚠️  MCP 集成模块初始化失败: " .. tostring(setup_err), vim.log.levels.WARN)
     end
@@ -238,7 +220,7 @@ function M.setup(opts)
 
   -- 方法2：如果方法1失败，尝试使用 require
   if not custom_tools_success then
-    custom_tools_success, custom_tools = pcall(require, "plugins.CodeCompanion_mcp.extensions.custom_mcp_tools")
+    custom_tools_success, custom_tools = pcall(require, "plugins.CodeCompanion.extensions.custom_mcp_tools")
   end
 
   -- 方法3：如果方法2失败，尝试相对路径
@@ -261,7 +243,7 @@ function M.setup(opts)
 
       opts.extensions["custom_mcp_tools"] = extension_config
 
-      vim.notify("✅ 自定义 MCP 工具扩展加载成功", vim.log.levels.INFO)
+      -- vim.notify("✅ 自定义 MCP 工具扩展加载成功", vim.log.levels.INFO)
 
       -- 显示可用的 MCP 工具
       -- if extension_config.tools then

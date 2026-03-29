@@ -117,7 +117,7 @@ function M.get_full_config()
   -- 尝试导入自动批准配置模块
   local mcphub_auto_approve
   local success, err = pcall(function()
-    mcphub_auto_approve = require("plugins.CodeCompanion_mcp.config.mcphub_auto_approve")
+    mcphub_auto_approve = require("plugins.CodeCompanion.config.mcphub_auto_approve")
   end)
   
   if not success then

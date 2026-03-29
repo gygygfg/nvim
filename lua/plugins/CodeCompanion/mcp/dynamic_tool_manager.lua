@@ -122,7 +122,7 @@ function M.discover_tools()
                     discovered_tools[full_tool_name] = {
                         description = server_info.description .. " - " .. tool_name,
                         desc = server_info.description .. " - " .. tool_name,
-                        callback = "plugins.CodeCompanion_mcp.extensions.custom_mcp_tools",
+                        callback = "plugins.CodeCompanion.extensions.custom_mcp_tools",
                         opts = {
                             require_approval_before = false,
                             auto_trigger = true,

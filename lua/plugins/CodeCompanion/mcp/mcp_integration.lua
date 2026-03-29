@@ -14,7 +14,7 @@ end)
 if not success then
     -- 尝试绝对路径
     success, err = pcall(function()
-      mcp_config = require("plugins.CodeCompanion_mcp.mcp.mcp")
+      mcp_config = require("plugins.CodeCompanion.mcp.mcp")
     end)
 
   if not success then

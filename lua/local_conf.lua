@@ -250,13 +250,13 @@ vim.api.nvim_create_autocmd('InsertEnter', {
   -- 检测剪贴板中的文本长度，如果很长则提示使用 paste 模式
   callback = function()
     local clipboard = vim.fn.getreg('+')
-    if clipboard and #clipboard > 200 then  -- 超过200个字符
+    if clipboard and #clipboard > 200 then -- 超过200个字符
       vim.defer_fn(function()
-        vim.notify('检测到大段文本，按 F2 可切换 paste 模式避免缩进问题', 
-        vim.log.levels.INFO, { 
-          title = '粘贴提示', 
-          timeout = 3000 
-        })
+        vim.notify('检测到大段文本，按 F2 可切换 paste 模式避免缩进问题',
+          vim.log.levels.INFO, {
+            title = '粘贴提示',
+            timeout = 3000
+          })
       end, 100)
     end
   end,
@@ -265,43 +265,45 @@ vim.api.nvim_create_autocmd('InsertEnter', {
 vim.api.nvim_create_user_command('Paste', function()
   -- 4. 提供简单的 :Paste 命令
   vim.o.paste = true
-  vim.notify('已启用 paste 模式，粘贴完成后会自动关闭', 
-  vim.log.levels.INFO, { 
-    title = '粘贴模式', 
-    timeout = 2000 
-  })
+  vim.notify('已启用 paste 模式，粘贴完成后会自动关闭',
+    vim.log.levels.INFO, {
+      title = '粘贴模式',
+      timeout = 2000
+    })
+  -- 自动进入插入模式
+  vim.cmd('startinsert')
   -- 插入模式离开后自动关闭 paste 模式
   vim.api.nvim_create_autocmd('InsertLeave', {
     once = true,
     callback = function()
       vim.o.paste = false
-      vim.notify('已自动关闭 paste 模式', 
-      vim.log.levels.INFO, { 
-        title = '粘贴模式', 
-        timeout = 1500 
-      })
+      vim.notify('已自动关闭 paste 模式',
+        vim.log.levels.INFO, {
+          title = '粘贴模式',
+          timeout = 1500
+        })
     end,
   })
-end,{ desc = '启用 paste 模式进行粘贴' })
+end, { desc = '启用 paste 模式进行粘贴' })
 
 -- 确保状态行显示
 vim.opt.laststatus = 2  -- 总是显示状态行
-vim.opt.showmode = true  -- 显示当前模式
-vim.opt.ruler = true     -- 显示光标位置
+vim.opt.showmode = true -- 显示当前模式
+vim.opt.ruler = true    -- 显示光标位置
 
 
 vim.diagnostic.config({
   -- 简化诊断提示
-  virtual_text = { 
-    enabled = false,  -- 禁用行内诊断提示
-    prefix = "■" 
-  }, 
-  float = { 
-    border = "none" 
-  } 
+  virtual_text = {
+    enabled = false, -- 禁用行内诊断提示
+    prefix = "■"
+  },
+  float = {
+    border = "none"
+  }
 })
 vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(
-  -- 关闭悬浮文档（手机端不易触达）
+-- 关闭悬浮文档（手机端不易触达）
   vim.lsp.handlers.hover, { border = "none" }
 )
 
@@ -313,7 +315,7 @@ vim.g.disable_config_change_prompt = true
 vim.g.silent_config_reload = true
 
 -- 设置静默模式
-vim.o.shortmess = vim.o.shortmess .. "s"  -- 添加静默标志
+vim.o.shortmess = vim.o.shortmess .. "s" -- 添加静默标志
 
 -- 全局拦截配置更改消息
 local original_notify = vim.notify
@@ -373,9 +375,9 @@ vim.api.nvim_create_autocmd("BufWritePost", {
       if filename == config_file then
         -- 静默处理配置文件更新
         vim.defer_fn(function()
-          vim.notify(filename .. " 配置已更新", vim.log.levels.INFO, { 
+          vim.notify(filename .. " 配置已更新", vim.log.levels.INFO, {
             title = "配置更新",
-            timeout = 1000, -- 1秒后自动消失
+            timeout = 1000,          -- 1秒后自动消失
             hide_from_history = true -- 不保存到历史
           })
         end, 100)
@@ -403,4 +405,3 @@ end
 -- 禁用写入备份提示
 vim.opt.writebackup = false
 vim.opt.backup = false
-

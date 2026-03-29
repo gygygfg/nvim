@@ -106,19 +106,17 @@ function M.main()
     -- 使用快捷键手动切换 paste 模式
     vim.o.paste = not vim.o.paste
     if vim.o.paste then
-      vim.notify('粘贴模式已启用 (按 F2 关闭)', vim.log.levels.INFO, { 
-        title = '粘贴模式', 
-        timeout = 2000 
+      vim.notify('粘贴模式已启用 (按 F2 关闭)', vim.log.levels.INFO, {
+        title = '粘贴模式',
+        timeout = 2000
       })
     else
-      vim.notify('粘贴模式已禁用', vim.log.levels.INFO, { 
-        title = '粘贴模式', 
-        timeout = 1500 
+      vim.notify('粘贴模式已禁用', vim.log.levels.INFO, {
+        title = '粘贴模式',
+        timeout = 1500
       })
     end
   end, { desc = '切换粘贴模式' })
-  -- 可选：设置快捷键
-  -- vim.keymap.set('n', '<leader>vp', ':Paste<CR>', { silent = true, desc = '启用粘贴模式' })
 end
 
 function M.ufo()
@@ -243,9 +241,10 @@ function M.codecompanion()
   -- codeCompanion
   local keymap = {}
   function keymap.setup()
-    _set_keymap({"v","n"}, "<leader>cc", ":CodeCompanionChat<CR>", { desc = "打开 CodeCompanionChat" })
+    _set_keymap({ "v", "n" }, "<leader>cc", ":CodeCompanionChat<CR>", { desc = "打开 CodeCompanionChat" })
     _set_keymap("v", "<leader>cp", ":CodeCompanionActions<CR>", { desc = "选区调用 CodeCompanion 动作" })
   end
+
   function keymap.chat()
     return {
       options = {
@@ -375,58 +374,52 @@ function M.codecompanion()
         callback = "keymaps.clear_rules",
       },
       clear_approvals = {
-        description = "[Tools] Clear approvals",
+        description = "[工具] 清除批准",
         modes = { n = "gtx" },
         index = 19,
         callback = "keymaps.clear_approvals",
       },
       yolo_mode = {
-        description = "[Tools] Toggle YOLO mode",
+        description = "[工具] 切换 YOLO 模式",
         modes = { n = "gty" },
         index = 20,
         callback = "keymaps.yolo_mode",
       },
       goto_file_under_cursor = {
-        description = "[Chat] Open file under cursor",
+        description = "[聊天] 打开光标下的文件",
         modes = { n = "gR" },
         index = 21,
         callback = "keymaps.goto_file_under_cursor",
       },
       copilot_stats = {
-        description = "[Adapter] Copilot statistics",
+        description = "[适配器] Copilot 统计信息",
         modes = { n = "gS" },
         index = 22,
         callback = "keymaps.copilot_stats",
       },
-      super_diff = {
-        description = "[Tools] Show Super Diff",
-        modes = { n = "gD" },
-        index = 23,
-        callback = "keymaps.super_diff",
-      },
-      -- Keymaps for ACP permission requests
       _acp_allow_always = {
-        description = "Allow Always",
-        modes = { n = "g1" },
+        description = "总是同意",
+        modes = { n = "a" },
         callback = function() end,
       },
       _acp_allow_once = {
-        description = "Allow Once",
-        modes = { n = "g2" },
+        description = "本次同意",
+        modes = { n = "y" },
         callback = function() end,
       },
       _acp_reject_once = {
-        description = "Reject Once",
-        modes = { n = "g3" },
+        description = "取消一次",
+        modes = { n = "q" },
         callback = function() end,
       },
       _acp_reject_always = {
-        description = "Reject Always",
-        modes = { n = "g4" },
+        description = "永远取消",
+        modes = { n = "e" },
         callback = function() end,
       },
     }
   end
+
   function keymap.inline()
     return {
       always_accept = {
@@ -458,6 +451,7 @@ function M.codecompanion()
       },
     }
   end
+
   return keymap
 end
 
@@ -588,7 +582,8 @@ function M.fugitive()
       if change_count <= 3 then
         message = message .. ":\n" .. table.concat(changes, "\n")
       else
-        message = message .. "（前3个）:\n" .. table.concat({unpack(changes, 1, 3)}, "\n") .. "\n... 还有 " .. (change_count - 3) .. " 个文件"
+        message = message ..
+            "（前3个）:\n" .. table.concat({ unpack(changes, 1, 3) }, "\n") .. "\n... 还有 " .. (change_count - 3) .. " 个文件"
       end
 
       vim.notify(message, vim.log.levels.WARN)
@@ -599,7 +594,7 @@ function M.fugitive()
     -- vim.notify("✓ 分支 " .. branch .. " 正在推送中...", vim.log.levels.INFO)
 
     -- 使用异步执行避免阻塞界面，添加错误处理
-    vim.fn.jobstart({"git", "pull", "--rebase", "origin", branch}, {
+    vim.fn.jobstart({ "git", "pull", "--rebase", "origin", branch }, {
       on_exit = function(_, exit_code)
         if exit_code ~= 0 then
           vim.notify("❌ git pull --rebase 失败，可能有冲突需要解决", vim.log.levels.ERROR)
@@ -625,7 +620,7 @@ function M.fugitive()
           return
         end
 
-        vim.fn.jobstart({"git", "push", "origin", branch}, {
+        vim.fn.jobstart({ "git", "push", "origin", branch }, {
           on_exit = function(_, push_exit_code)
             if push_exit_code == 0 then
               -- 静默模式：只显示简短的成功通知
@@ -634,7 +629,7 @@ function M.fugitive()
               vim.notify("❌ git push 失败，请检查网络连接或权限", vim.log.levels.ERROR)
 
               -- 显示推送失败的原因
-              vim.fn.jobstart({"git", "push", "origin", branch, "--verbose"}, {
+              vim.fn.jobstart({ "git", "push", "origin", branch, "--verbose" }, {
                 on_stderr = function(_, data)
                   smart_git_error_handler(data, "推送错误")
                 end
@@ -690,7 +685,7 @@ function M.telescope()
       vim.notify("⚠️  当前处于分离头指针状态，无法推送", vim.log.levels.WARN)
 
       -- 显示可用的分支
-      local branches = vim.fn.system("git branch --list"):gsub("\n", " ") 
+      local branches = vim.fn.system("git branch --list"):gsub("\n", " ")
       vim.notify("可用分支: " .. branches, vim.log.levels.INFO)
 
       -- 建议切换到主分支
@@ -717,7 +712,7 @@ function M.telescope()
     end
 
     -- 检查最近一次推送状态
-    vim.fn.jobstart({"git", "log", "--oneline", "-1", "--pretty=format:%h %s (%cr)"}, {
+    vim.fn.jobstart({ "git", "log", "--oneline", "-1", "--pretty=format:%h %s (%cr)" }, {
       on_exit = function(_, exit_code, data)
         if exit_code == 0 and data and #data > 0 then
           vim.notify("最近提交: " .. data[1], vim.log.levels.INFO)
@@ -762,7 +757,8 @@ function M.telescope()
         local alt_exists = check_branch_exists(alternative_branch)
 
         if alt_exists == "0" then
-          local use_alt = vim.fn.input("分支 " .. target_branch .. " 不存在，但存在 " .. alternative_branch .. " 分支，是否切换到 " .. alternative_branch .. "？(y/n): ")
+          local use_alt = vim.fn.input("分支 " ..
+            target_branch .. " 不存在，但存在 " .. alternative_branch .. " 分支，是否切换到 " .. alternative_branch .. "？(y/n): ")
           if use_alt:lower() == "y" then
             actual_branch = alternative_branch
             branch_exists = "0"
@@ -775,7 +771,7 @@ function M.telescope()
         vim.notify("正在切换到分支: " .. actual_branch, vim.log.levels.INFO)
 
         -- 使用 vim.fn.system 同步执行以获取详细错误信息
-        local output = vim.fn.system({"git", "checkout", actual_branch})
+        local output = vim.fn.system({ "git", "checkout", actual_branch })
         local exit_code = vim.v.shell_error
 
         if exit_code == 0 then
@@ -817,11 +813,13 @@ function M.telescope()
                       }, function(final_input)
                         if final_input and final_input ~= "" then
                           -- 使用安全的 git commit 函数，启用自动暂存
-                          local success, commit_hash_or_error, result = git_commit.safe_git_commit(final_input, { auto_stage = true })
+                          local success, commit_hash_or_error, result = git_commit.safe_git_commit(final_input,
+                            { auto_stage = true })
 
                           if success then
                             if commit_hash_or_error ~= "" then
-                              vim.notify("✅ AI 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. final_input, vim.log.levels.INFO)
+                              vim.notify("✅ AI 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. final_input,
+                                vim.log.levels.INFO)
                             else
                               vim.notify("✅ AI 提交成功: " .. final_input, vim.log.levels.INFO)
                             end
@@ -867,20 +865,20 @@ function M.telescope()
             if choice == "1" then
               -- 暂存更改
               vim.notify("正在暂存更改...", vim.log.levels.INFO)
-              local stash_output = vim.fn.system({"git", "stash"})
+              local stash_output = vim.fn.system({ "git", "stash" })
               if vim.v.shell_error == 0 then
                 vim.notify("✅ 更改已暂存", vim.log.levels.INFO)
 
                 -- 重新尝试切换分支
                 vim.notify("重新尝试切换到分支: " .. actual_branch, vim.log.levels.INFO)
-                local retry_output = vim.fn.system({"git", "checkout", actual_branch})
+                local retry_output = vim.fn.system({ "git", "checkout", actual_branch })
                 if vim.v.shell_error == 0 then
                   vim.notify("✅ 已切换到分支: " .. actual_branch, vim.log.levels.INFO)
 
                   -- 询问是否恢复暂存的更改
                   local restore_choice = vim.fn.input("是否恢复暂存的更改？(y/n): ")
                   if restore_choice:lower() == "y" then
-                    local pop_output = vim.fn.system({"git", "stash", "pop"})
+                    local pop_output = vim.fn.system({ "git", "stash", "pop" })
                     if vim.v.shell_error == 0 then
                       vim.notify("✅ 已恢复暂存的更改", vim.log.levels.INFO)
                     else
@@ -893,7 +891,6 @@ function M.telescope()
               else
                 vim.notify("❌ 暂存失败: " .. stash_output, vim.log.levels.ERROR)
               end
-
             elseif choice == "2" then
               -- 提交更改
               vim.notify("📝 准备提交更改...", vim.log.levels.INFO)
@@ -919,7 +916,7 @@ function M.telescope()
 
                       -- 提交成功后重新尝试切换分支
                       vim.notify("重新尝试切换到分支: " .. actual_branch, vim.log.levels.INFO)
-                      local retry_output = vim.fn.system({"git", "checkout", actual_branch})
+                      local retry_output = vim.fn.system({ "git", "checkout", actual_branch })
                       if vim.v.shell_error == 0 then
                         vim.notify("✅ 已切换到分支: " .. actual_branch, vim.log.levels.INFO)
                       else
@@ -944,15 +941,17 @@ function M.telescope()
                       }, function(final_input)
                         if final_input and final_input ~= "" then
                           -- 使用安全的 git commit 函数，启用自动暂存
-                          local success, commit_hash_or_error, result = git_commit.safe_git_commit(final_input, { auto_stage = true })
+                          local success, commit_hash_or_error, result = git_commit.safe_git_commit(final_input,
+                            { auto_stage = true })
 
                           if success then
                             if commit_hash_or_error ~= "" then
-                              vim.notify("✅ AI 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. final_input, vim.log.levels.INFO)
+                              vim.notify("✅ AI 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. final_input,
+                                vim.log.levels.INFO)
 
                               -- 提交成功后重新尝试切换分支
                               vim.notify("重新尝试切换到分支: " .. actual_branch, vim.log.levels.INFO)
-                              local retry_output = vim.fn.system({"git", "checkout", actual_branch})
+                              local retry_output = vim.fn.system({ "git", "checkout", actual_branch })
                               if vim.v.shell_error == 0 then
                                 vim.notify("✅ 已切换到分支: " .. actual_branch, vim.log.levels.INFO)
                               else
@@ -974,19 +973,18 @@ function M.telescope()
                   end, { include_unstaged = true })
                 end
               end)
-
             elseif choice == "3" then
               -- 放弃更改
               local confirm = vim.fn.input("⚠️  确定要丢弃所有未提交的更改吗？(输入 'yes' 确认): ")
               if confirm:lower() == "yes" then
                 vim.notify("正在丢弃更改...", vim.log.levels.WARN)
-                local reset_output = vim.fn.system({"git", "checkout", "--", "."})
+                local reset_output = vim.fn.system({ "git", "checkout", "--", "." })
                 if vim.v.shell_error == 0 then
                   vim.notify("✅ 已丢弃所有未提交的更改", vim.log.levels.INFO)
 
                   -- 重新尝试切换分支
                   vim.notify("重新尝试切换到分支: " .. actual_branch, vim.log.levels.INFO)
-                  local retry_output = vim.fn.system({"git", "checkout", actual_branch})
+                  local retry_output = vim.fn.system({ "git", "checkout", actual_branch })
                   if vim.v.shell_error == 0 then
                     vim.notify("✅ 已切换到分支: " .. actual_branch, vim.log.levels.INFO)
                   else
@@ -998,13 +996,11 @@ function M.telescope()
               else
                 vim.notify("操作已取消", vim.log.levels.INFO)
               end
-
             elseif choice == "4" then
               vim.notify("操作已取消", vim.log.levels.INFO)
             else
               vim.notify("无效选项，操作已取消", vim.log.levels.WARN)
             end
-
           elseif output:match("not found") then
             vim.notify("提示：分支可能不存在，尝试使用 git branch -a 查看所有分支", vim.log.levels.INFO)
           else
@@ -1018,7 +1014,7 @@ function M.telescope()
           vim.notify("正在创建新分支: " .. actual_branch, vim.log.levels.INFO)
 
           -- 使用 vim.fn.system 同步执行以获取详细错误信息
-          local output = vim.fn.system({"git", "checkout", "-b", actual_branch})
+          local output = vim.fn.system({ "git", "checkout", "-b", actual_branch })
           local exit_code = vim.v.shell_error
 
           if exit_code == 0 then
@@ -1060,11 +1056,13 @@ function M.telescope()
                         }, function(final_input)
                           if final_input and final_input ~= "" then
                             -- 使用安全的 git commit 函数，启用自动暂存
-                            local success, commit_hash_or_error, result = git_commit.safe_git_commit(final_input, { auto_stage = true })
+                            local success, commit_hash_or_error, result = git_commit.safe_git_commit(final_input,
+                              { auto_stage = true })
 
                             if success then
                               if commit_hash_or_error ~= "" then
-                                vim.notify("✅ AI 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. final_input, vim.log.levels.INFO)
+                                vim.notify("✅ AI 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. final_input,
+                                  vim.log.levels.INFO)
                               else
                                 vim.notify("✅ AI 提交成功: " .. final_input, vim.log.levels.INFO)
                               end
@@ -1140,4 +1138,3 @@ function M.molten()
 end
 
 return M
-
