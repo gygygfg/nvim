@@ -11,6 +11,9 @@ local base_config = require("plugins.CodeCompanion.core.interactions_base").conf
 local mcp_config = require("plugins.CodeCompanion.config.mcp_tools_config")
 local mcp_tools_config = mcp_config.get_tools_config()
 
+-- 导入动态工具管理器
+local dynamic_tool_manager = require("plugins.CodeCompanion.mcp.dynamic_tool_manager")
+
 -- 导入上下文管理器
 local context_manager = require("plugins.CodeCompanion.config.context_manager")
 
@@ -212,13 +215,18 @@ local function deep_merge_configs(base, mcp)
     end
   end
 
-  -- 6. 添加 MCP Hub 动态工具组
-  local mcphub_integration = require("plugins.CodeCompanion.config.mcphub_integration")
-  local mcphub_tool_groups = mcphub_integration.get_dynamic_tool_groups()
-
-  if mcphub_tool_groups and mcphub_tool_groups.groups then
-    for group_name, group_config in pairs(mcphub_tool_groups.groups) do
+  -- 6. 添加动态工具组
+  local dynamic_tools, dynamic_groups = dynamic_tool_manager.discover_tools()
+  
+  if dynamic_groups then
+    for group_name, group_config in pairs(dynamic_groups) do
       merged.chat.tools.groups[group_name] = group_config
+    end
+  end
+  
+  if dynamic_tools then
+    for tool_name, tool_config in pairs(dynamic_tools) do
+      merged.chat.tools[tool_name] = tool_config
     end
   end
 
@@ -240,9 +248,25 @@ local function deep_merge_configs(base, mcp)
     -- 这个钩子会在工具发现时调用
     -- 可以在这里更新工具列表
     
+    -- 刷新动态工具
+    local tools, groups = dynamic_tool_manager.discover_tools()
+    
+    -- 更新工具配置
+    if tools then
+      for tool_name, tool_config in pairs(tools) do
+        merged.chat.tools[tool_name] = tool_config
+      end
+    end
+    
+    if groups then
+      for group_name, group_config in pairs(groups) do
+        merged.chat.tools.groups[group_name] = group_config
+      end
+    end
+    
     -- 示例：记录工具发现事件
     if os.getenv("CODECOMPANION_DEBUG") then
-      print("动态工具发现钩子被调用")
+      print("动态工具发现钩子被调用，刷新了工具列表")
     end
   end
 

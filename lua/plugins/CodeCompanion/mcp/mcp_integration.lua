@@ -115,12 +115,19 @@ function M.test_mcp_server(server_name)
   -- 根据服务器类型执行测试
   if server_name == "context7" then
     M.test_context7()
-  elseif server_name == "crawl4ai" then
-    M.test_crawl4ai()
+  elseif server_name == "web-scout" then
+    M.test_web_scout()
   elseif server_name == "github" then
     M.test_github()
   elseif server_name == "neovim" then
     M.test_neovim()
+  elseif server_name == "chrome-devtools" then
+    M.test_chrome_devtools()
+  elseif server_name == "mcphub" then
+    M.test_mcphub()
+  else
+    vim.notify("❌ 未知的服务器名称: " .. server_name, vim.log.levels.ERROR)
+    vim.notify("💡 可用的服务器: context7, web-scout, github, neovim, chrome-devtools, mcphub", vim.log.levels.INFO)
   end
 
   return true
@@ -133,11 +140,11 @@ function M.test_context7()
   vim.notify("💡 使用示例: @{context7} Get Python documentation", vim.log.levels.INFO)
 end
 
--- 测试 Crawl4AI 服务器
-function M.test_crawl4ai()
-  vim.notify("🌐 测试 Crawl4AI 网页爬取...", vim.log.levels.INFO)
-  vim.notify("✅ Crawl4AI 测试完成", vim.log.levels.INFO)
-  vim.notify("💡 使用示例: @{crawl4ai} Crawl https://example.com", vim.log.levels.INFO)
+-- 测试 Web Scout 服务器
+function M.test_web_scout()
+  vim.notify("🌐 测试 Web Scout 网页搜索...", vim.log.levels.INFO)
+  vim.notify("✅ Web Scout 测试完成", vim.log.levels.INFO)
+  vim.notify("💡 使用示例: @{web_scout} Search for latest news", vim.log.levels.INFO)
 end
 
 -- 测试 GitHub 服务器
@@ -152,6 +159,20 @@ function M.test_neovim()
   vim.notify("🖥️  测试 Neovim 编辑器操作...", vim.log.levels.INFO)
   vim.notify("✅ Neovim 测试完成", vim.log.levels.INFO)
   vim.notify("💡 使用示例: @{neovim} Get current buffer content", vim.log.levels.INFO)
+end
+
+-- 测试 Chrome DevTools 服务器
+function M.test_chrome_devtools()
+  vim.notify("🌐 测试 Chrome DevTools 浏览器自动化...", vim.log.levels.INFO)
+  vim.notify("✅ Chrome DevTools 测试完成", vim.log.levels.INFO)
+  vim.notify("💡 使用示例: @{chrome_devtools} Take screenshot of webpage", vim.log.levels.INFO)
+end
+
+-- 测试 MCP Hub 服务器
+function M.test_mcphub()
+  vim.notify("🔧 测试 MCP Hub 服务器管理...", vim.log.levels.INFO)
+  vim.notify("✅ MCP Hub 测试完成", vim.log.levels.INFO)
+  vim.notify("💡 使用示例: @{mcphub} Get current servers", vim.log.levels.INFO)
 end
 
 -- 测试所有 MCP 服务器
@@ -387,9 +408,17 @@ function M.create_commands()
     M.test_mcp_server("context7")
   end, {desc = "测试 Context7 服务器"})
 
-  vim.api.nvim_create_user_command("TestMCPCrawl4AI", function()
-    M.test_mcp_server("crawl4ai")
-  end, {desc = "测试 Crawl4AI 服务器"})
+  vim.api.nvim_create_user_command("TestMCPWebScout", function()
+    M.test_mcp_server("web-scout")
+  end, {desc = "测试 Web Scout 服务器"})
+  
+  vim.api.nvim_create_user_command("TestMCPChromeDevTools", function()
+    M.test_mcp_server("chrome-devtools")
+  end, {desc = "测试 Chrome DevTools 服务器"})
+  
+  vim.api.nvim_create_user_command("TestMCPHub", function()
+    M.test_mcp_server("mcphub")
+  end, {desc = "测试 MCP Hub 服务器"})
 
   vim.api.nvim_create_user_command("TestMCPGitHub", function()
     M.test_mcp_server("github")

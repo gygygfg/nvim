@@ -27,7 +27,7 @@ function M.get_mcphub_servers()
                 description = "Context7 代码库文档服务",
                 tools = {"resolve-library-id", "query-docs"}
             },
-            web_scout = {
+            ["web-scout"] = {
                 enabled = true,
                 description = "网页搜索和内容提取服务",
                 tools = {"DuckDuckGoWebSearch", "UrlContentExtractor"}
@@ -58,7 +58,7 @@ function M.get_mcphub_servers()
                     "delete_items", "find_files", "list_directory", "write_file", "edit_file"
                 }
             },
-            chrome_devtools = {
+            ["chrome-devtools"] = {
                 enabled = true,
                 description = "Chrome DevTools 浏览器自动化服务",
                 tools = {
@@ -104,8 +104,9 @@ function M.discover_tools()
     -- 为每个服务器创建工具
     for server_name, server_info in pairs(servers) do
         if server_info.enabled then
-            -- 创建服务器组
-            discovered_groups[server_name] = {
+            -- 创建服务器组（使用下划线格式，因为工具组名称不支持连字符）
+            local group_name = server_name:gsub("-", "_")
+            discovered_groups[group_name] = {
                 description = server_info.description .. " 工具组",
                 tools = {},
                 opts = {
@@ -132,7 +133,7 @@ function M.discover_tools()
                     }
                     
                     -- 添加到服务器组
-                    table.insert(discovered_groups[server_name].tools, full_tool_name)
+                    table.insert(discovered_groups[group_name].tools, full_tool_name)
                 end
             end
         end
@@ -179,7 +180,9 @@ function M.get_dynamic_system_prompt()
     
     for server_name, server_info in pairs(servers) do
         if server_info.enabled then
-            table.insert(server_list, "- @" .. server_name .. ": " .. server_info.description)
+            -- 工具组名称使用下划线格式
+            local group_name = server_name:gsub("-", "_")
+            table.insert(server_list, "- @{" .. group_name .. "}: " .. server_info.description)
         end
     end
     
@@ -194,9 +197,10 @@ function M.get_dynamic_system_prompt()
 1. **通用 MCP 访问**: @{mcp} [查询内容]
    - 访问所有动态发现的 MCP 工具
    
-2. **服务器组访问**: @{server_name} [查询内容]
+2. **服务器组访问**: @{server_group} [查询内容]
    - 访问特定服务器的所有工具
    - 例如: @{neovim} 读取当前文件
+   - 注意: 服务器名称中的连字符会转换为下划线（如 web-scout → web_scout）
    
 3. **独立工具访问**: @{server_name__tool_name} [参数]
    - 精细控制单个工具
@@ -209,9 +213,19 @@ function M.get_dynamic_system_prompt()
 
 ### 示例
 - `@{mcp} Get Python documentation`
-- `@{crawl4ai} Crawl https://example.com`
+- `@{web_scout} Search for latest news`
 - `@{github} List my repositories`
 - `@{neovim} Get current buffer content`
+- `@{chrome_devtools} Take screenshot of webpage`
+- `@{mcphub} Get current servers`
+
+### 故障排除
+如果遇到 "Server not found" 错误：
+1. 检查服务器名称是否正确（注意连字符和下划线）
+2. 使用 @{mcp} 访问所有工具
+3. 查看可用服务器：`@{mcphub} Get current servers`
+
+记住：服务器组名称使用下划线（如 web_scout），但独立工具名称使用连字符（如 web-scout__UrlContentExtractor）
 ]]
 end
 

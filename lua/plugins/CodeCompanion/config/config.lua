@@ -205,57 +205,23 @@ function M.setup(opts)
     vim.notify("💡 这不会影响 MCP 工具的基本功能，只是缺少一些高级集成特性", vim.log.levels.INFO)
   end
 
-  -- 加载自定义 MCP 工具扩展
-  local custom_tools_success, custom_tools = false, nil
-
-  -- 方法1：尝试使用 loadfile 加载
-  local custom_tools_path = current_dir .. "/extensions/custom_mcp_tools.lua"
-  custom_tools_success, custom_tools = pcall(function()
-    local chunk, err = loadfile(custom_tools_path)
-    if not chunk then
-      error("加载文件失败: " .. (err or "未知错误"))
-    end
-    return chunk()
-  end)
-
-  -- 方法2：如果方法1失败，尝试使用 require
-  if not custom_tools_success then
-    custom_tools_success, custom_tools = pcall(require, "plugins.CodeCompanion.extensions.custom_mcp_tools")
-  end
-
-  -- 方法3：如果方法2失败，尝试相对路径
-  if not custom_tools_success then
-    custom_tools_success, custom_tools = pcall(require, "extensions.custom_mcp_tools")
-  end
-  if custom_tools_success and custom_tools then
-    -- 获取扩展配置
-    local extension_config = custom_tools.setup()
-
-    -- 确保扩展配置被正确设置
-    if extension_config then
-      -- 确保 opts 不为 nil
-      opts = opts or {}
-
-      -- 将扩展配置合并到主配置中
-      if not opts.extensions then
-        opts.extensions = {}
-      end
-
-      opts.extensions["custom_mcp_tools"] = extension_config
-
-      -- vim.notify("✅ 自定义 MCP 工具扩展加载成功", vim.log.levels.INFO)
-
-      -- 显示可用的 MCP 工具
-      -- if extension_config.tools then
-      --   local tool_count = 0
-      --   for name, _ in pairs(extension_config.tools) do
-      --     tool_count = tool_count + 1
-      --   end
-      --   vim.notify("🔧 加载了 " .. tool_count .. " 个 MCP 工具", vim.log.levels.INFO)
-      -- end
-    end
+  -- 初始化动态工具管理器
+  local dynamic_tool_manager_success, dynamic_tool_manager = pcall(require,
+    "plugins.CodeCompanion.mcp.dynamic_tool_manager")
+  if dynamic_tool_manager_success and dynamic_tool_manager then
+    dynamic_tool_manager.setup()
+    -- vim.notify("✅ 动态工具管理器初始化成功", vim.log.levels.INFO)
   else
-    vim.notify("⚠️  自定义 MCP 工具扩展加载失败: " .. tostring(custom_tools), vim.log.levels.WARN)
+    vim.notify("⚠️  动态工具管理器加载失败", vim.log.levels.WARN)
+  end
+
+  -- 初始化 MCP 工具配置
+  local mcp_tools_config_success, mcp_tools_config = pcall(require, "plugins.CodeCompanion.config.mcp_tools_config")
+  if mcp_tools_config_success and mcp_tools_config then
+    mcp_tools_config.setup()
+    -- vim.notify("✅ MCP 工具配置初始化成功", vim.log.levels.INFO)
+  else
+    vim.notify("⚠️  MCP 工具配置加载失败", vim.log.levels.WARN)
   end
 end
 

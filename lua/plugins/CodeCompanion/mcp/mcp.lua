@@ -21,18 +21,19 @@ M.servers = {
     },
   },
 
-  crawl4ai = {
+  ["web-scout"] = {
     enabled = true,
     command = "docker",
     args = {"exec", "-i", "crawl4ai-mcp", "python", "mcp_server_with_api.py"},
     autoApprove = true,
     priority = 2,
-    description = "Crawl4AI 网页爬取服务（Docker 版本）",
+    description = "网页搜索和内容提取服务",
     auto_trigger_keywords = {
       "crawl", "scrape", "extract", "webpage", "website", "article",
       "blog", "news", "content", "latest", "recent", "update",
       "get content from", "fetch from", "read from", "check website",
-      "visit page", "http://", "https://", "www.", ".com", ".org"
+      "visit page", "http://", "https://", "www.", ".com", ".org",
+      "search", "find", "look up", "browse", "web search", "online search"
     },
   },
 
@@ -53,6 +54,35 @@ M.servers = {
     autoApprove = true,
     priority = 4,
     description = "GitHub 仓库管理服务",
+  },
+
+  ["chrome-devtools"] = {
+    enabled = true,
+    command = "docker",
+    args = {"exec", "-i", "chrome-devtools-mcp", "node", "dist/index.js"},
+    autoApprove = true,
+    priority = 5,
+    description = "Chrome DevTools 浏览器自动化服务",
+    auto_trigger_keywords = {
+      "browser", "chrome", "devtools", "screenshot", "automation",
+      "web automation", "browser automation", "take screenshot",
+      "capture page", "inspect element", "debug", "performance",
+      "lighthouse", "audit", "network", "console"
+    },
+  },
+
+  mcphub = {
+    enabled = true,
+    command = "docker",
+    args = {"exec", "-i", "mcphub", "node", "dist/index.js"},
+    autoApprove = true,
+    priority = 6,
+    description = "MCP Hub 服务器管理服务",
+    auto_trigger_keywords = {
+      "mcp", "servers", "tools", "manage", "configure", "status",
+      "list servers", "enable server", "disable server", "refresh",
+      "discover", "tools discovery", "server management"
+    },
   },
 }
 

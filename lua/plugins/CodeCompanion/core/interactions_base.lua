@@ -27,7 +27,8 @@ local function get_base_system_prompt()
   - 修改完代码后使用#{lsp}检查代码是否正确
 
   请根据任务需求自主选择合适的工具，无需等待用户指定。
-  若有需要用户决定或操作时等待用户操作]]
+  若有需要用户决定或操作时等待用户操作
+  尽量优先使用原来的函数名称和文件结构]]
   return str:gsub("%s+", " ")
 end
 
@@ -240,21 +241,21 @@ M.config = {
         description = "文件搜索",
         desc = "文件搜索",
         opts = {
-          require_approval_before = false,  -- 执行前不需要用户审批
+          require_approval_before = false, -- 执行前不需要用户审批
         },
       },
       ["get_changed_files"] = {
         description = "获取已更改文件",
         desc = "获取已更改文件",
         opts = {
-          require_approval_before = false,  -- 执行前不需要用户审批
+          require_approval_before = false, -- 执行前不需要用户审批
         },
       },
       ["read_file"] = {
         description = "读取文件内容",
         desc = "读取文件内容",
         opts = {
-          require_approval_before = false,  -- 执行前需用户审批
+          require_approval_before = false, -- 执行前需用户审批
           require_cmd_approval = true,     -- 命令本身需经批准
         },
       },
@@ -263,7 +264,7 @@ M.config = {
         desc = "使用 grep 搜索代码",
         opts = {
           respect_gitignore = true,
-          require_approval_before = false,  -- 执行前需用户审批
+          require_approval_before = false, -- 执行前需用户审批
           require_cmd_approval = true,     -- 命令本身需经批准
         },
       },
@@ -271,72 +272,72 @@ M.config = {
         description = "查找代码符号的用法",
         desc = "查找代码符号的用法",
         opts = {
-          require_approval_before = false,  -- 执行前不需要用户审批
+          require_approval_before = false, -- 执行前不需要用户审批
         },
       },
       ["fetch_webpage"] = {
         description = "获取网页内容",
         desc = "获取网页内容",
         opts = {
-          require_approval_before = false,  -- 执行前不需要用户审批
+          require_approval_before = false, -- 执行前不需要用户审批
         },
       },
       ["insert_edit_into_file"] = {
         description = "插入或编辑文件内容",
         desc = "插入或编辑文件内容",
         opts = {
-          require_approval_before = {       -- 审批配置
-            buffer = false,                 -- 编辑 Neovim 缓冲区前不需审批
-            file = false,                   -- 编辑工作目录文件前不需审批
+          require_approval_before = {        -- 审批配置
+            buffer = false,                  -- 编辑 Neovim 缓冲区前不需审批
+            file = false,                    -- 编辑工作目录文件前不需审批
           },
           require_confirmation_after = true, -- 编辑后需用户确认才接受更改
-          auto_accept_changes = false,      -- 不自动接受更改
-          file_size_limit_mb = 2,           -- 文件大小限制（超过此值可能影响操作）
+          auto_accept_changes = false,       -- 不自动接受更改
+          file_size_limit_mb = 2,            -- 文件大小限制（超过此值可能影响操作）
         },
       },
       ["create_file"] = {
         description = "创建新文件",
         desc = "创建新文件",
         opts = {
-          require_approval_before = false,   -- 执行前需用户审批
-          require_cmd_approval = true,      -- 命令本身需经批准
+          require_approval_before = false, -- 执行前需用户审批
+          require_cmd_approval = true,     -- 命令本身需经批准
         },
       },
       ["delete_file"] = {
         description = "删除文件",
         desc = "删除文件",
         opts = {
-          require_approval_before = true,   -- 执行前需用户审批
-          require_cmd_approval = false,      -- 命令本身需经批准
-          allowed_in_yolo_mode = false,     -- 不允许在"yolo模式"下执行
+          require_approval_before = true, -- 执行前需用户审批
+          require_cmd_approval = false,   -- 命令本身需经批准
+          allowed_in_yolo_mode = false,   -- 不允许在"yolo模式"下执行
         },
       },
       ["cmd_runner"] = {
-        description = "执行 shell 命令",  -- 工具描述
-        desc = "执行 shell 命令",          -- 简短描述
+        description = "执行 shell 命令", -- 工具描述
+        desc = "执行 shell 命令", -- 简短描述
         opts = {
-          require_approval_before = false,   -- 执行前需用户审批
-          require_cmd_approval = false,      -- 命令本身需经批准
-          allowed_in_yolo_mode = false,     -- 不允许在"yolo模式"下执行
+          require_approval_before = false, -- 执行前需用户审批
+          require_cmd_approval = false, -- 命令本身需经批准
+          allowed_in_yolo_mode = false, -- 不允许在"yolo模式"下执行
         },
       },
       ["memory"] = {
         description = "记忆存储/检索",
         desc = "记忆存储/检索",
         opts = {
-          require_approval_before = false,   -- 执行前需用户审批
+          require_approval_before = false, -- 执行前需用户审批
         },
       },
 
       opts = {
         -- 工具执行选项配置
-        auto_submit_success = true,         -- 工具执行成功时自动提交结果
-        auto_submit_errors = true,          -- 工具执行出错时自动提交错误
-        auto_tool_selection = true,         -- 自动选择工具（根据用户请求）
-        require_approval_before = false,    -- 工具执行前不需要用户批准
+        auto_submit_success = true,      -- 工具执行成功时自动提交结果
+        auto_submit_errors = true,       -- 工具执行出错时自动提交错误
+        auto_tool_selection = true,      -- 自动选择工具（根据用户请求）
+        require_approval_before = false, -- 工具执行前不需要用户批准
         default_tools = {
-          "files",           -- 文件操作工具组：包含 read_file, create_file, delete_file, insert_edit_into_file
-          "cmd_runner",      -- 命令行执行工具：用于执行 shell 命令
+          "files",                       -- 文件操作工具组：包含 read_file, create_file, delete_file, insert_edit_into_file
+          "cmd_runner",                  -- 命令行执行工具：用于执行 shell 命令
           "memory",
           -- MCP 工具将由 MCP Hub 动态添加
         },
@@ -383,6 +384,10 @@ M.config = {
       diff_default_action = "accept",
       diff_prompt_text = "按 <Enter> 接受所有更改，按 <Esc> 取消",
     },
+  },
+
+  shared = {
+    keymaps = require("keymaps").codecompanion().diffy(),
   },
 
   cmd = {

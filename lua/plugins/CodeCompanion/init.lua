@@ -28,11 +28,7 @@ return {
     local adapters = require("plugins.CodeCompanion.core.adapters")
     local interactions_with_mcp = require("plugins.CodeCompanion.mcp.interactions_with_mcp")
     local display = require("plugins.CodeCompanion.core.display")
-    local mcphub_integration = require("plugins.CodeCompanion.config.mcphub_integration")
-
-    -- 获取 MCP Hub 完整配置
-    local mcphub_config = mcphub_integration.get_full_config()
-
+    
     -- 构建配置表
     local config = {
       -- ==================== 日志配置 ====================
@@ -47,12 +43,9 @@ return {
       -- ==================== 显示配置 ====================
       display = display.config,
 
-      -- ==================== MCP Hub 扩展配置 ====================
-      extensions = mcphub_config.extension,
-
+      -- ==================== 语言配置 ====================
       opts = {
         language = "Chinese",
-        mcphub = mcphub_config,
       },
     }
 
