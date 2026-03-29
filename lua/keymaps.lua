@@ -1105,5 +1105,39 @@ function M.telescope()
   end, { desc = "修复分离头指针并准备推送" })
 end
 
+function M.molten()
+  -- 初始化 Jupyter 内核
+  _set_keymap("n", "<leader>mi", ":MoltenInit<CR>", { silent = true, desc = "Initialize Jupyter kernel" })
+
+  -- 运行当前行
+  _set_keymap("n", "<leader>rl", ":MoltenEvaluateLine<CR>", { silent = true, desc = "Evaluate current line" })
+
+  -- 运行操作符选择的内容
+  _set_keymap("n", "<leader>e", ":MoltenEvaluateOperator<CR>", { silent = true, desc = "Evaluate operator selection" })
+
+  -- 运行可视模式选择的内容
+  _set_keymap("v", "<leader>r", ":<C-u>MoltenEvaluateVisual<CR>gv", { silent = true, desc = "Evaluate visual selection" })
+
+  -- 重新运行当前单元格
+  _set_keymap("n", "<leader>rr", ":MoltenReevaluateCell<CR>", { silent = true, desc = "Re-evaluate cell" })
+
+  -- 删除当前单元格
+  _set_keymap("n", "<leader>rd", ":MoltenDeleteCell<CR>", { silent = true, desc = "Delete cell" })
+
+  -- 显示/隐藏输出窗口
+  _set_keymap("n", "<leader>ro", ":MoltenShowOutput<CR>", { silent = true, desc = "Show/hide output" })
+
+  -- 进入输出窗口
+  _set_keymap("n", "<leader>re", ":MoltenEnterOutput<CR>", { silent = true, desc = "Enter output window" })
+  -- 使用 Ctrl+Enter 运行当前行（类似 Jupyter 的快捷键）
+  _set_keymap("n", "<C-Enter>", ":MoltenEvaluateLine<CR>", { silent = true })
+
+  -- 在可视模式下使用 Ctrl+Enter 运行选中内容
+  _set_keymap("v", "<C-Enter>", ":<C-u>MoltenEvaluateVisual<CR>gv", { silent = true })
+
+  -- 使用 Shift+Enter 运行并移动到下一行
+  _set_keymap("n", "<S-Enter>", ":MoltenEvaluateLine<CR>j", { silent = true })
+end
+
 return M
 

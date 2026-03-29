@@ -124,11 +124,11 @@ local function get_venv_python(start_path)
   while dir and dir ~= "" and dir ~= "/" do
     local venv_dirs = { ".venv", "venv", "env" }
     local python_names = { "python3", "python" }
-    for _, venv_dir in ipairs(venv_dirs) do
+    for _, venv_dir_name in ipairs(venv_dirs) do
       for _, python_name in ipairs(python_names) do
-        local venv_python = dir .. venv_dir .. "/bin/" .. python_name
+        local venv_python = dir .. "/" .. venv_dir_name .. "/bin/" .. python_name
         if is_executable(venv_python) then
-          return venv_python, dir .. venv_dir
+          return venv_python, dir .. "/" .. venv_dir_name
         end
       end
     end
@@ -175,7 +175,16 @@ end
 
 function M.setup_neovim_python()
   -- 为Neovim设置Python解释器
-  local buf_path = vim.api.nvim_buf_get_name(0)
+  local buf_path
+  local buf_exists = pcall(function()
+    buf_path = vim.api.nvim_buf_get_name(0)
+  end)
+
+  if not buf_exists or buf_path == "" then
+    -- 如果没有缓冲区，使用当前工作目录
+    buf_path = vim.fn.getcwd()
+  end
+
   local python_path, venv_dir = get_venv_python(buf_path)
   if not python_path or not is_executable(python_path) then
     python_path = get_system_python()
@@ -191,6 +200,9 @@ function M.setup_neovim_python()
 
   vim.g.python3_host_prog = python_path
   vim.g.python_host_prog = python_path
+
+  -- 调试信息
+  -- vim.notify(string.format("设置Python解释器: %s\n虚拟环境: %s", python_path, venv_dir or "无"), vim.log.levels.INFO, { title = "Python设置" })
 
   return python_path, venv_dir
 end
