@@ -27,4 +27,7 @@ require("lazy").setup("plugins", {
   git = {
     -- url_format = "https://xget.xi-xu.me/gh/%s.git",
   },
+  -- rocks = {
+  --   enabled = false,     -- 彻底禁用 luarocks，使用纯 Lua 插件
+  -- }
 })
