@@ -1,29 +1,25 @@
 -- Mason lsp 配置
--- 迁移自: servers/rust_analyzer.lua
--- 时间: 2026-03-29 20:37:04
+-- rust-analyzer 配置
 
--- Mason 安装: rust-analyzer
 return {
-  capabilities = capabilities,
-  filetypes = {"rust"},
-  cmd = {
-    "rust-analyzer",
-  },
-  settings = {
-    ["rust-analyzer"] = {
-      cargo = {
-        allFeatures = true,
-        loadOutDirsFromCheck = true,
-        runBuildScripts = true,
-      },
-      checkOnSave = {
-        command = "clippy",
-        extraArgs = { "--no-deps" },
-      },
-      procMacro = {
-        enable = true
-      },
-    }
-  },
-  single_file_support = true
+    cmd = { "rust-analyzer" },
+    filetypes = { "rust" },
+    settings = {
+      rust_analyzer = {
+        -- 启用单文件支持
+        standalone = true,
+        -- 禁用自动工作区发现
+        checkOnSave = {
+          command = "clippy"
+        },
+        cargo = {
+          allFeatures = true
+        },
+        -- 单文件配置
+        standaloneConfig = {
+          enable = true
+        }
+      }
+    },
+    single_file_support = true
 }

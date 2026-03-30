@@ -72,21 +72,21 @@ function M.setup()
   vim.defer_fn(function()
     local lsp_configs = scan_config_directory("lsp")
 
-    -- mason-lspconfig 需要的是 LSP 服务器名称，不是 Mason 包名
+    -- mason-lspconfig 只用于安装，不用于自动配置
     require("mason-lspconfig").setup({
       ensure_installed = lsp_configs, -- 直接使用配置文件名（如 bashls, html）
       automatic_installation = true,
+      -- 禁用自动配置，由我们的自定义加载器处理
+      automatic_installation = false,
     })
 
-    custom_notify("📦 Mason LSP 配置完成: " .. #lsp_configs .. " 个服务器", vim.log.levels.INFO)
+    -- custom_notify("📦 Mason LSP 安装配置完成: " .. #lsp_configs .. " 个服务器", vim.log.levels.INFO)
   end, 1000)
 
   -- 3. 延迟加载 LSP 配置
   vim.defer_fn(function()
     local lsp_loader = require("plugins.lsp.mason.lsp_config_loader")
     local loaded_servers = lsp_loader.setup_all_lsp_servers()
-
-    -- custom_notify("🚀 LSP 服务器加载完成: " .. #loaded_servers .. " 个服务器", vim.log.levels.INFO)
   end, 2000)
 
   -- custom_notify("✅ Mason 初始化完成", vim.log.levels.INFO)

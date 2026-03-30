@@ -1,15 +1,14 @@
 -- Mason lsp 配置
--- 迁移自: servers/eslint.lua
--- 时间: 2026-03-29 20:37:04
+-- eslint 配置
 
 return {
-      on_attach = function(client, bufnr)
-          vim.api.nvim_create_autocmd("BufWritePre", {
-              buffer = bufnr,
-              callback = function()
-                  vim.lsp.buf.format({ async = false })
-              end,
-          })
-      end
+    cmd = { "vscode-eslint-language-server", "--stdio" },
+    filetypes = { "javascript", "javascriptreact", "typescript", "typescriptreact", "vue", "svelte" },
+    settings = {
+      validate = "on",
+      workingDirectory = {
+        mode = "auto"
+      }
+    },
+    single_file_support = true
 }
-

@@ -1,9 +1,8 @@
 -- Mason lsp 配置
--- 迁移自: servers/ts_ls.lua
--- 时间: 2026-03-29 20:37:04
+-- typescript-language-server 配置
 
 return {
-    capabilities = require("cmp_nvim_lsp").default_capabilities(),
-    root_dir = require("lspconfig.util").root_pattern("package.json", "tsconfig.json"),
+    cmd = { "typescript-language-server", "--stdio" },
+    filetypes = { "javascript", "javascriptreact", "typescript", "typescriptreact" },
+    single_file_support = true
 }
-

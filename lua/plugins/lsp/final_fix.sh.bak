@@ -1,0 +1,22 @@
+#!/bin/bash
+# 修复所有 LSP 配置文件中的 capabilities 引用问题
+
+CONFIG_DIR="/root/.config/nvim/lua/plugins/lsp/mason/lsp/"
+
+echo "开始修复 LSP 配置文件..."
+
+for file in "$CONFIG_DIR"/*.lua; do
+    if [ -f "$file" ]; then
+        # 移除 capabilities = capabilities, 这一行
+        sed -i '/^[[:space:]]*capabilities[[:space:]]*=[[:space:]]*capabilities[[:space:]]*,/d' "$file"
+        filename=$(basename "$file")
+        echo "✅ 已修复: $filename"
+    fi
+done
+
+echo ""
+echo "修复完成！"
+echo "请执行以下操作："
+echo "1. 重新启动 Neovim"
+echo "2. 或运行 :LspRestart 命令"
+echo "3. 检查 LSP 服务器是否正常加载"

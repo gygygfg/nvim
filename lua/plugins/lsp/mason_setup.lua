@@ -98,8 +98,6 @@ end
 local capabilities = require("cmp_nvim_lsp").default_capabilities()
 
 local function load_lsp_servers()
-  local lspconfig = require("lspconfig")
-
   for _, server_name in ipairs(all_servers) do
     local ok, custom_config = pcall(require, "plugins/lsp/servers/" .. server_name)
 
@@ -112,16 +110,18 @@ local function load_lsp_servers()
       server_config = vim.tbl_deep_extend("force", server_config, custom_config)
     end
 
-    -- Special handling for pyright to allow more dynamic configuration
-    if server_name == "pyright" then
-      -- We'll use a custom setup for pyright to handle dynamic environments
-      local pyright_config = vim.tbl_deep_extend("force", {}, server_config)
-      lspconfig[server_name].setup(pyright_config)
-    elseif lspconfig[server_name] then
-      lspconfig[server_name].setup(server_config)
+    -- 使用正确的 vim.lsp.start() API 设置服务器
+    local ok_setup, err = pcall(function()
+      vim.lsp.start({
+        name = server_name,
+        config = server_config
+      })
+    end)
+    
+    if ok_setup then
       custom_notify("✅ 已加载服务器: " .. server_name, log_levels.INFO)
     else
-      custom_notify("⚠️ 未知的 LSP 服务器: " .. server_name, log_levels.WARN)
+      custom_notify("⚠️ 加载服务器失败: " .. server_name .. " - " .. tostring(err), log_levels.WARN)
     end
   end
 end
