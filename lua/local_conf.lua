@@ -253,10 +253,10 @@ vim.api.nvim_create_autocmd('InsertEnter', {
     if clipboard and #clipboard > 200 then -- 超过200个字符
       vim.defer_fn(function()
         vim.notify('检测到大段文本，按 F2 可切换 paste 模式避免缩进问题',
-          vim.log.levels.INFO, {
-            title = '粘贴提示',
-            timeout = 3000
-          })
+        vim.log.levels.INFO, {
+          title = '粘贴提示',
+          timeout = 3000
+        })
       end, 100)
     end
   end,
@@ -266,10 +266,10 @@ vim.api.nvim_create_user_command('Paste', function()
   -- 4. 提供简单的 :Paste 命令
   vim.o.paste = true
   vim.notify('已启用 paste 模式，粘贴完成后会自动关闭',
-    vim.log.levels.INFO, {
-      title = '粘贴模式',
-      timeout = 2000
-    })
+  vim.log.levels.INFO, {
+    title = '粘贴模式',
+    timeout = 2000
+  })
   -- 自动进入插入模式
   vim.cmd('startinsert')
   -- 插入模式离开后自动关闭 paste 模式
@@ -278,10 +278,10 @@ vim.api.nvim_create_user_command('Paste', function()
     callback = function()
       vim.o.paste = false
       vim.notify('已自动关闭 paste 模式',
-        vim.log.levels.INFO, {
-          title = '粘贴模式',
-          timeout = 1500
-        })
+      vim.log.levels.INFO, {
+        title = '粘贴模式',
+        timeout = 1500
+      })
     end,
   })
 end, { desc = '启用 paste 模式进行粘贴' })
@@ -302,10 +302,12 @@ vim.diagnostic.config({
     border = "none"
   }
 })
-vim.lsp.handlers["textDocument/hover"] = vim.lsp.with(
--- 关闭悬浮文档（手机端不易触达）
-  vim.lsp.handlers.hover, { border = "none" }
-)
+-- 设置悬浮文档样式（手机端不易触达）
+vim.lsp.handlers.hover = function(_, result, ctx, config)
+  config = config or {}
+  config.border = "none"
+  vim.lsp.handlers.hover(_, result, ctx, config)
+end
 
 -- ==================== 全局配置更改提示禁用 ====================
 -- 禁用所有配置更改检测提示，避免干扰
@@ -405,3 +407,33 @@ end
 -- 禁用写入备份提示
 vim.opt.writebackup = false
 vim.opt.backup = false
+
+
+
+-- ==================== 终端 DSR 修复配置 ====================
+-- 解决 "defaults.lua: Did not detect DSR response from terminal" 警告
+-- 这可以加快 Neovim 的启动速度
+
+-- 禁用 DSR 检测，避免启动时的警告和延迟
+-- vim.opt.t_Co = "256"  -- 强制设置终端颜色为 256 色
+
+-- 设置终端类型，避免自动检测
+-- vim.opt.term = "xterm-256color"
+
+-- 禁用一些可能导致问题的终端功能检测
+-- vim.opt.ttyfast = true  -- 启用快速终端模式
+
+-- 设置终端响应超时时间（毫秒）
+-- vim.opt.ttimeout = true
+-- vim.opt.ttimeoutlen = 100  -- 减少超时等待时间
+
+-- 禁用鼠标模式，避免终端交互问题
+-- vim.opt.mouse = ""
+
+-- 设置终端 GUI 模式（如果可用）
+-- if vim.fn.has("gui_running") == 1 then
+--   vim.opt.termguicolors = true
+-- end
+
+-- 打印配置信息（可选）
+-- print("终端 DSR 修复已启用")

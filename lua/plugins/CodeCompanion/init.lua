@@ -9,10 +9,6 @@ return {
     "nvim-treesitter/nvim-treesitter",
     "hrsh7th/nvim-cmp",
     "stevearc/dressing.nvim",
-    {
-      "MeanderingProgrammer/render-markdown.nvim",
-      ft = { "markdown", "codecompanion" }
-    },
     -- MCP Hub 插件
     {
       "ravitemer/mcphub.nvim",

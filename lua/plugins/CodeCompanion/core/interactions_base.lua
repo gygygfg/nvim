@@ -338,7 +338,7 @@ M.config = {
         default_tools = {
           "files",                       -- 文件操作工具组：包含 read_file, create_file, delete_file, insert_edit_into_file
           "cmd_runner",                  -- 命令行执行工具：用于执行 shell 命令
-          "memory",
+          -- "memory",
           -- MCP 工具将由 MCP Hub 动态添加
         },
 
