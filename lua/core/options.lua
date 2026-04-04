@@ -11,7 +11,7 @@ opt.termguicolors = true    -- 真彩色支持
 opt.expandtab = true        -- Tab转空格
 opt.tabstop = 4            -- Tab宽度
 opt.shiftwidth = 4         -- 自动缩进宽度
-opt.smartindent = true     -- 智能缩进
+-- opt.smartindent = true     -- 智能缩进
 opt.wrap = false           -- 不自动换行
 
 -- 搜索
