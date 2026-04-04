@@ -42,4 +42,4 @@ load.require('nvim-treesitter.configs')
 load.require('nvim-autopairs')
 load.require('Comment')
 
-print('编辑器配置已加载（使用新的 load 包装函数）')
+-- print('编辑器配置已加载（使用新的 load 包装函数）')

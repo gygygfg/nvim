@@ -1,0 +1,25 @@
+-- lua/config/noice.lua
+-- Noice 通知系统配置，启动后加载
+
+load.addPack({
+  { src = "https://github.com/folke/noice.nvim" },
+  { src = "https://github.com/MunifTanjim/nui.nvim" },
+  { src = "https://github.com/rcarriga/nvim-notify" },
+})
+
+load.nvim_create_autocmd('VimEnter', {
+  -- 在 VimEnter 事件中加载 noice 及其依赖
+  pattern = '*',
+  once = true,
+  callback = function()
+    require('nui').setup()
+    require('nvim-notify').setup()
+    require('noice').setup({
+      views = {
+        notify = {
+          position = { row = 1, col = -1 } -- 顶部右侧显示通知
+        }
+      }
+    })
+  end,
+})

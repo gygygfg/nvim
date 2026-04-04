@@ -121,14 +121,12 @@ function M.setup(opts)
   end
 
   -- Initialize the main plugin if available
-  local plugin_success, codecompanion = pcall(require, "codecompanion")
-  if plugin_success then
+  local ok, codecompanion = pcall(require, "codecompanion")
+  if ok and codecompanion then
     codecompanion.setup(opts)
   else
-    vim.notify("⚠️  未找到主 codecompanion.nvim 插件。请确保已安装。", vim.log.levels.WARN)
-    vim.notify(
-      "💡  Install with: git clone https://github.com/olimorris/codecompanion.nvim ~/.local/share/nvim/lazy/codecompanion.nvim",
-      vim.log.levels.INFO)
+    vim.notify("⚠️  CodeCompanion plugin not found", vim.log.levels.ERROR)
+    return
   end
 
   -- 设置按键绑定，捕获可能的错误
@@ -207,7 +205,7 @@ function M.setup(opts)
 
   -- 初始化动态工具管理器
   local dynamic_tool_manager_success, dynamic_tool_manager = pcall(require,
-    "config.CodeCompanion.mcp.dynamic_tool_manager")
+  "config.CodeCompanion.mcp.dynamic_tool_manager")
   if dynamic_tool_manager_success and dynamic_tool_manager then
     dynamic_tool_manager.setup()
     -- vim.notify("✅ 动态工具管理器初始化成功", vim.log.levels.INFO)

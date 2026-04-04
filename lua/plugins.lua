@@ -1,7 +1,4 @@
 -- lua/plugins.lua
--- ============================================
--- 异步配置文件加载 - 新版加载机制
--- ============================================
 
 local uv = vim.loop
 local M = {}
@@ -234,8 +231,10 @@ M.load_all_configs_async = function(on_progress, on_complete)
       -- 所有配置加载完成
       if loaded + failed >= total then
         vim.schedule(function()
-          local msg = string.format('插件配置加载完成: %d成功, %d失败', loaded, failed)
-          vim.notify(msg, vim.log.levels.INFO)
+          if failed > 0 then
+            local msg = string.format('插件配置加载完成: %d成功, %d失败', loaded, failed)
+            vim.notify(msg, vim.log.levels.INFO)
+          end
           if on_complete then
             on_complete(results, loaded, failed)
           end
@@ -334,28 +333,80 @@ M.setup = function(opts)
   -- 初始化加载包装器（只初始化一次）
   local loader = init_load_wrapper()
 
-  if use_async then
-    vim.defer_fn(function()
-      M.load_all_configs_async(on_progress, function(results, loaded, failed)
-        -- 所有配置文件加载完成后执行收集到的任务
-        loader.execute_collected_tasks()
+  -- 创建加载完成的标记和回调队列
+  local loaded = false
+  local pending_callbacks = {}
 
-        if on_complete then
-          on_complete(results, loaded, failed)
-        end
+  local function loading_complete(results, loaded_count, failed)
+    loaded = true
+
+    -- 执行收集到的任务
+    loader.execute_collected_tasks()
+
+    -- 执行所有等待的回调
+    for _, callback in ipairs(pending_callbacks) do
+      vim.schedule(function()
+        callback(results, loaded_count, failed)
       end)
-    end, opts.delay or 50)
+    end
+    pending_callbacks = {}
+
+    -- 调用用户提供的完成回调
+    if on_complete then
+      vim.schedule(function()
+        on_complete(results, loaded_count, failed)
+      end)
+    end
+  end
+
+  if use_async then
+    -- 立即开始异步加载，不延迟
+    M.load_all_configs_async(on_progress, function(results, loaded_count, failed)
+      loading_complete(results, loaded_count, failed)
+    end)
   else
     vim.schedule(function()
-      M.load_all_configs_sync()
-      -- 所有配置文件加载完成后执行收集到的任务
-      loader.execute_collected_tasks()
-
-      if on_complete then
-        on_complete({}, #package.loaded, 0)
+      local config_files = M.load_all_configs_sync()
+      local results = {}
+      for _, name in ipairs(config_files) do
+        results[name] = { success = true }
       end
+      loading_complete(results, #config_files, 0)
     end)
   end
+
+  -- 返回加载状态检查函数
+  return {
+    -- 检查是否已加载完成
+    is_loaded = function() return loaded end,
+
+    -- 等待加载完成（如果已加载则立即执行）
+    wait_until_loaded = function(callback)
+      if loaded then
+        vim.schedule(callback)
+      else
+        table.insert(pending_callbacks, callback)
+      end
+    end,
+
+    -- 阻塞等待加载完成（用于同步场景）
+    wait_sync = function(timeout_ms)
+      if loaded then return true end
+
+      timeout_ms = timeout_ms or 5000  -- 默认5秒超时
+      local start_time = vim.loop.now()
+
+      while not loaded do
+        if vim.loop.now() - start_time > timeout_ms then
+          vim.notify('等待配置加载超时', vim.log.levels.WARN)
+          return false
+        end
+        vim.loop.sleep(10)  -- 每10ms检查一次
+      end
+
+      return true
+    end
+  }
 end
 
 -- 导出模块
