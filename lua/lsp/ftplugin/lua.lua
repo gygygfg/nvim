@@ -1,15 +1,10 @@
--- lua/lsp/ftplugin/lua.lua
--- Lua 文件类型触发 LSP 配置
+-- ~/.config/nvim/lua/lsp/ftplugin/lua.lua
+local lsp = require("lsp")
 
--- 防止重复配置
-if vim.b.lsp_configured then
-  return
-end
-vim.b.lsp_configured = true
+-- 启用 lua_ls 服务器
+lsp.enable_server("lua_ls")
 
--- 加载 lua_ls 配置
-local config = require('lsp.configs.lua_ls')
-
--- 启用 lua_ls 服务器并应用配置
-vim.lsp.config('lua_ls', config)
-vim.lsp.enable('lua_ls')
+-- 可选：Lua 特定设置
+vim.opt_local.tabstop = 2
+vim.opt_local.shiftwidth = 2
+vim.opt_local.expandtab = true

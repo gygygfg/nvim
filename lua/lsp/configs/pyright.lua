@@ -1,15 +1,14 @@
--- lua/lsp/configs/pyright.lua
--- Python 语言服务器配置
-
+-- ~/.config/nvim/lua/lsp/configs/pyright.lua
 return {
   settings = {
     python = {
       analysis = {
-        typeCheckingMode = "basic",
         autoSearchPaths = true,
-        useLibraryCodeForTypes = true,
         diagnosticMode = "workspace",
+        typeCheckingMode = "basic",
+        useLibraryCodeForTypes = true,
       },
     },
   },
+  root_dir = vim.fs.dirname(vim.fs.find({ "pyproject.toml", "setup.py", "requirements.txt", ".git" }, { upward = true })[1]),
 }
