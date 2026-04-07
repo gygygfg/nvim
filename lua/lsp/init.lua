@@ -3,8 +3,8 @@
 
 local M = {}
 
--- 文件类型到 LSP 服务器的映射
 M.filetype_to_lsp = {
+  -- 文件类型到 LSP 服务器的映射
   lua = "lua_ls",
   python = "pyright",
   javascript = "tsserver",
@@ -29,8 +29,8 @@ M.filetype_to_lsp = {
   tex = "texlab",
 }
 
--- LSP 服务器配置
 M.server_configs = {
+  -- LSP 服务器配置
   lua_ls = {
     settings = {
       Lua = {
@@ -107,10 +107,10 @@ M.server_configs = {
   },
 }
 
--- 设置全局按键映射
 local function setup_global_keymaps()
+  -- 设置全局按键映射
   -- 悬停文档
-  vim.keymap.set('n', 'K', function()
+  vim.keymap.set('n', 'gK', function()
     local bufnr = vim.api.nvim_get_current_buf()
     local clients = vim.lsp.get_clients({ bufnr = bufnr })
     if #clients > 0 then
@@ -184,8 +184,8 @@ local function setup_global_keymaps()
   vim.keymap.set('i', '<C-k>', vim.lsp.buf.signature_help, { desc = '签名帮助' })
 end
 
--- 设置诊断
 local function setup_diagnostics()
+  -- 设置诊断
   vim.diagnostic.config({
     virtual_text = {
       prefix = "●",
@@ -217,8 +217,8 @@ local function setup_diagnostics()
   end
 end
 
--- 启动文件类型的 LSP
 local function start_lsp_for_filetype(ft, bufnr)
+  -- 启动文件类型的 LSP
   bufnr = bufnr or vim.api.nvim_get_current_buf()
 
   -- 避免重复启动
@@ -243,8 +243,8 @@ local function start_lsp_for_filetype(ft, bufnr)
   end
 end
 
--- 主设置函数
 function M.setup()
+  -- 主设置函数
   -- 设置诊断
   setup_diagnostics()
 
@@ -314,8 +314,8 @@ function M.setup()
   print("LSP 配置已加载")
 end
 
--- Mason 设置
 function M.setup_mason()
+  -- Mason 设置
   local mason_ok, mason = pcall(require, "mason")
   if not mason_ok then
     vim.notify("Mason 插件未加载", vim.log.levels.WARN)
@@ -339,8 +339,8 @@ function M.setup_mason()
   end, 1000)
 end
 
--- 确保 LSP 服务器已安装
 function M.ensure_lsp_servers()
+  -- 确保 LSP 服务器已安装
   local mason_registry_ok, mason_registry = pcall(require, "mason-registry")
   if not mason_registry_ok then
     return
@@ -380,8 +380,8 @@ function M.ensure_lsp_servers()
   end
 end
 
--- 创建命令
 vim.api.nvim_create_user_command("LspInstallMissing", function()
+  -- 创建命令
   local mason_registry_ok, mason_registry = pcall(require, "mason-registry")
   if not mason_registry_ok then
     vim.notify("无法访问 Mason 注册表", vim.log.levels.ERROR)

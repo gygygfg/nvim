@@ -5,17 +5,17 @@
 local M = {}
 
 -- 导入基础配置
-local base_config = require("config.CodeCompanion.core.interactions_base").config
+local base_config = require("plugins.CodeCompanion.core.interactions_base").config
 
 -- 导入动态 MCP 工具配置
-local mcp_config = require("config.CodeCompanion.config.mcp_tools_config")
+local mcp_config = require("plugins.CodeCompanion.config.mcp_tools_config")
 local mcp_tools_config = mcp_config.get_tools_config()
 
 -- 导入动态工具管理器
-local dynamic_tool_manager = require("config.CodeCompanion.mcp.dynamic_tool_manager")
+local dynamic_tool_manager = require("plugins.CodeCompanion.mcp.dynamic_tool_manager")
 
 -- 导入上下文管理器
-local context_manager = require("config.CodeCompanion.config.context_manager")
+local context_manager = require("plugins.CodeCompanion.config.context_manager")
 
 -- 辅助函数：从文本中提取指定章节
 local function extract_section(text, start_marker, end_marker)

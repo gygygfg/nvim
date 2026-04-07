@@ -1,7 +1,7 @@
 -- lua/config/treesitter.lua
 -- Treesitter 语法高亮配置
 
-require('nvim-treesitter.configs').setup({
+require('nvim-treesitter').setup({
   ensure_installed = {
     "lua", "vim", "vimdoc", "bash", "python",
     "javascript", "typescript", "html", "css", "json"

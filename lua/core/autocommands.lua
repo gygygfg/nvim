@@ -7,9 +7,7 @@ local autocmd = vim.api.nvim_create_autocmd
 -- 创建自动命令组
 local mygroup = augroup("MyConfig", { clear = true })
 
--- ============================================================
 -- 文件类型相关设置
--- ============================================================
 
 vim.api.nvim_create_autocmd("UIEnter", {
   -- 主题配置 - 启动时加载
@@ -74,16 +72,14 @@ autocmd("FileType", {
 autocmd("FileType", {
   pattern = { "make" },
   callback = function()
-    vim.opt_local.noexpandtab = true  -- makefile 必须使用制表符
+    vim.opt_local.noexpandtab = true -- makefile 必须使用制表符
     vim.opt_local.tabstop = 4
     vim.opt_local.shiftwidth = 4
   end,
   group = mygroup
 })
 
--- ============================================================
 -- 保存时自动格式化
--- ============================================================
 autocmd("BufWritePre", {
   pattern = "*",
   callback = function()
@@ -131,19 +127,7 @@ autocmd("BufWritePre", {
   group = mygroup
 })
 
--- ============================================================
--- 自动切换目录
--- ============================================================
-autocmd("BufEnter", {
-  group = mygroup,
-  callback = function()
-    vim.cmd("silent! lcd %:p:h")
-  end
-})
-
--- ============================================================
 -- 诊断配置
--- ============================================================
 vim.diagnostic.config({
   virtual_text = {
     enabled = false,
@@ -153,9 +137,3 @@ vim.diagnostic.config({
     border = "none"
   }
 })
-
--- ============================================================
--- 静音配置更改提示
--- ============================================================
-vim.g.disable_config_change_prompt = true
-vim.g.silent_config_reload = true

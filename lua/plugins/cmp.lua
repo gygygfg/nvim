@@ -32,7 +32,7 @@ cmp.setup({
         end
         local line, col = unpack(vim.api.nvim_win_get_cursor(0))
         return col ~= 0
-          and vim.api.nvim_buf_get_text(0, line - 1, 0, line - 1, col, {})[1]:match("^%s*$") == nil
+            and vim.api.nvim_buf_get_text(0, line - 1, 0, line - 1, col, {})[1]:match("^%s*$") == nil
       end
 
       if cmp.visible() then
@@ -44,7 +44,7 @@ cmp.setup({
       else
         fallback()
       end
-    end, { "i", "s" }),
+    end, { "i", "s", "c" }),
     ['<S-Tab>'] = cmp.mapping(function(fallback)
       if cmp.visible() then
         cmp.select_prev_item()
@@ -82,6 +82,9 @@ cmp.setup.cmdline({ "/", "?" }, {
     { name = "buffer" },
   },
 })
+
+-- 加载 cmp-cmdline 插件（因为它是 opt 包）
+vim.cmd.packadd('cmp-cmdline')
 
 cmp.setup.cmdline(':', {
   mapping = cmp.mapping.preset.cmdline(),

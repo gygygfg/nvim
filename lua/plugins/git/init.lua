@@ -27,11 +27,11 @@ vim.pack.add({
 
 -- 初始化 Git 相关配置
 -- 加载 git commit 模块
-require("config.git.commit").setup()
+require("plugins.git.commit").setup()
 
 -- 加载 fugitive 配置模块
-require("config.git.fugitive").setup()
+require("plugins.git.fugitive").setup()
 
 -- 设置快捷键映射
-require("core.keymaps").fugitive()
-require("core.keymaps").telescope()
+-- require("core.keymaps").fugitive()
+-- require("core.keymaps").telescope()

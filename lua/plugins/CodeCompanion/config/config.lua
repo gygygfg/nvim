@@ -98,7 +98,7 @@ function M.setup(opts)
   -- 设置包路径，确保模块可以正确加载
   -- 使用基于家目录的动态路径
   local home_dir = vim.fn.expand("~")
-  local current_dir = home_dir .. "/.config/nvim/lua/config/CodeCompanion"
+  local current_dir = home_dir .. "/.config/nvim/lua/plugins.CodeCompanion"
 
   -- 将当前插件目录添加到包路径
   package.path = package.path .. ";" .. current_dir .. "/?.lua"
@@ -180,7 +180,7 @@ function M.setup(opts)
 
   -- 方法2：如果方法1失败，尝试使用 require
   if not mcp_integration_success then
-    mcp_integration_success, mcp_integration = pcall(require, "config.CodeCompanion.mcp.mcp_integration")
+    mcp_integration_success, mcp_integration = pcall(require, "plugins.CodeCompanion.mcp.mcp_integration")
   end
 
   -- 方法3：如果方法2失败，尝试相对路径
@@ -205,7 +205,7 @@ function M.setup(opts)
 
   -- 初始化动态工具管理器
   local dynamic_tool_manager_success, dynamic_tool_manager = pcall(require,
-  "config.CodeCompanion.mcp.dynamic_tool_manager")
+    "plugins.CodeCompanion.mcp.dynamic_tool_manager")
   if dynamic_tool_manager_success and dynamic_tool_manager then
     dynamic_tool_manager.setup()
     -- vim.notify("✅ 动态工具管理器初始化成功", vim.log.levels.INFO)
@@ -214,7 +214,7 @@ function M.setup(opts)
   end
 
   -- 初始化 MCP 工具配置
-  local mcp_tools_config_success, mcp_tools_config = pcall(require, "config.CodeCompanion.config.mcp_tools_config")
+  local mcp_tools_config_success, mcp_tools_config = pcall(require, "plugins.CodeCompanion.config.mcp_tools_config")
   if mcp_tools_config_success and mcp_tools_config then
     mcp_tools_config.setup()
     -- vim.notify("✅ MCP 工具配置初始化成功", vim.log.levels.INFO)

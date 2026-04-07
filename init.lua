@@ -43,6 +43,7 @@ vim.pack.add({
   gh('hrsh7th/cmp-nvim-lsp'),
   gh('hrsh7th/cmp-buffer'),
   gh('hrsh7th/cmp-path'),
+  gh('hrsh7th/cmp-cmdline'),
   gh('saadparwaiz1/cmp_luasnip'),
   -- 模糊搜索
   gh('nvim-telescope/telescope.nvim'),
@@ -66,6 +67,7 @@ vim.pack.add({
   gh('hrsh7th/cmp-nvim-lsp'),
   gh('hrsh7th/cmp-buffer'),
   gh('hrsh7th/cmp-path'),
+  gh('hrsh7th/cmp-cmdline'),
   gh('saadparwaiz1/cmp_luasnip'),
   gh('L3MON4D3/LuaSnip'),
   -- AI 辅助
@@ -74,13 +76,10 @@ vim.pack.add({
   -- 工具类
   gh('nvim-lua/popup.nvim'),
 })
-
--- 静默通知加载
-vim.notify = require("notify")
-
 -- 3. 加载核心配置
 
 -- 加载基础选项和按键映射
+require('core.notify_config')
 require("core.options")
 require("core.keymaps")
 require("core.autocommands")
@@ -88,8 +87,11 @@ require("core.autocommands")
 -- 加载LSP配置
 require("lsp").setup()
 
--- 4. 加载插件配置
-require('plugins-manager')
+require('plugins-manager').setup({
+  -- 4. 加载插件配置
+  auto_load = true, -- 自动加载所有插件
+  -- print_list = true -- 打印可用插件列表
+})
 
 -- 通知用户配置已加载
 vim.notify("Neovim 配置加载完成", vim.log.levels.INFO)

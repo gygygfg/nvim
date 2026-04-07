@@ -39,3 +39,34 @@ _set_keymap('n', '<leader>fg', function()
   require('plugins.telescope').setup()
   require('telescope.builtin').live_grep()
 end, { desc = '搜索文本' })
+
+-- CodeCompanion keymaps
+local function codecompanion()
+  return {
+    chat = function()
+      return {
+        keymaps = {
+          -- Add chat-specific keymaps here if needed
+        }
+      }
+    end,
+    inline = function()
+      return {
+        keymaps = {
+          -- Add inline-specific keymaps here if needed
+        }
+      }
+    end,
+    diffy = function()
+      return {
+        keymaps = {
+          -- Add diffy-specific keymaps here if needed
+        }
+      }
+    end,
+  }
+end
+
+return {
+  codecompanion = codecompanion,
+}

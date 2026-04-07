@@ -1,7 +1,7 @@
 local M = {}
 
 -- 导入动态工具管理器
-local dynamic_tool_manager = require("config.CodeCompanion.mcp.dynamic_tool_manager")
+local dynamic_tool_manager = require("plugins.CodeCompanion.mcp.dynamic_tool_manager")
 
 -- 获取动态系统提示
 function M.get_dynamic_system_prompt()
