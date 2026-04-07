@@ -11,6 +11,34 @@ local mygroup = augroup("MyConfig", { clear = true })
 -- 文件类型相关设置
 -- ============================================================
 
+vim.api.nvim_create_autocmd("UIEnter", {
+  -- 主题配置 - 启动时加载
+  once = true,
+  callback = function()
+    require('plugins.theme')
+  end,
+})
+
+vim.api.nvim_create_autocmd("VimEnter", {
+  -- 状态栏和缓冲区 - 启动后加载
+  once = true,
+  callback = function()
+    pcall(require, 'plugins.lualine')
+    pcall(require, 'plugins.bufferline')
+  end,
+})
+
+vim.api.nvim_create_user_command("NvimTreeToggle", function()
+  -- 文件浏览器 - 按需加载
+  require('plugins.nvim_tree').toggle()
+end, { desc = "切换文件浏览器" })
+
+vim.api.nvim_create_user_command("TelescopeFind", function()
+  -- Telescope - 按需加载
+  require('plugins.telescope').setup()
+  require('telescope.builtin').find_files()
+end, { desc = "查找文件" })
+
 -- 缩进2格的文件类型
 autocmd("FileType", {
   pattern = {

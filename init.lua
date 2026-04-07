@@ -52,13 +52,22 @@ vim.pack.add({
   gh('sindrets/diffview.nvim'),
   gh('lewis6991/gitsigns.nvim'),
   -- LSP 相关
-  gh('williamboman/mason.nvim'),
-  gh('williamboman/mason-lspconfig.nvim'),
-  gh('neovim/nvim-lspconfig'),
+  -- gh('neovim/nvim-lspconfig'),
   gh('j-hui/fidget.nvim'),
   gh('stevearc/dressing.nvim'),
   gh('folke/trouble.nvim'),
   gh('folke/which-key.nvim'),
+  gh('neovim/nvim-lspconfig'), -- 虽然0.12有内置lsp，但这个插件提供更好配置
+  -- Mason 和相关插件
+  gh('williamboman/mason.nvim'),
+  gh('williamboman/mason-lspconfig.nvim'),
+  -- 如果需要补全，可以添加这些插件
+  gh('hrsh7th/nvim-cmp'),
+  gh('hrsh7th/cmp-nvim-lsp'),
+  gh('hrsh7th/cmp-buffer'),
+  gh('hrsh7th/cmp-path'),
+  gh('saadparwaiz1/cmp_luasnip'),
+  gh('L3MON4D3/LuaSnip'),
   -- AI 辅助
   gh('olimorris/codecompanion.nvim'),
   gh('github/copilot.vim'),
@@ -66,52 +75,21 @@ vim.pack.add({
   gh('nvim-lua/popup.nvim'),
 })
 
+-- 静默通知加载
+vim.notify = require("notify")
+
 -- 3. 加载核心配置
 
 -- 加载基础选项和按键映射
 require("core.options")
-require("core.keymaps").setup()
+require("core.keymaps")
 require("core.autocommands")
 
--- 加载 LSP 全局配置（按键映射、通用设置）
-require('lsp')
+-- 加载LSP配置
+require("lsp").setup()
 
--- 4. 延迟加载插件配置
--- 使用 vim.api.nvim_create_autocmd 或 FileType 事件触发加载
-
-vim.api.nvim_create_autocmd("UIEnter", {
-  -- 主题配置 - 启动时加载
-  once = true,
-  callback = function()
-    require('plugins.theme')
-  end,
-})
-
-vim.api.nvim_create_autocmd("VimEnter", {
-  -- 状态栏和缓冲区 - 启动后加载
-  once = true,
-  callback = function()
-    pcall(require, 'plugins.lualine')
-    pcall(require, 'plugins.bufferline')
-  end,
-})
-
-vim.api.nvim_create_user_command("NvimTreeToggle", function()
-  -- 文件浏览器 - 按需加载
-  require('plugins.nvim_tree').toggle()
-end, { desc = "切换文件浏览器" })
-
-vim.api.nvim_create_user_command("TelescopeFind", function()
-  -- Telescope - 按需加载
-  require('plugins.telescope').setup()
-  require('telescope.builtin').find_files()
-end, { desc = "查找文件" })
-
-vim.keymap.set('n', '<leader>ff', '<cmd>TelescopeFind<CR>', { desc = '查找文件' })
-vim.keymap.set('n', '<leader>fg', function()
-  require('plugins.telescope').setup()
-  require('telescope.builtin').live_grep()
-end, { desc = '搜索文本' })
+-- 4. 加载插件配置
+require('plugins-manager')
 
 -- 通知用户配置已加载
 vim.notify("Neovim 配置加载完成", vim.log.levels.INFO)
