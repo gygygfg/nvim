@@ -1,16 +1,15 @@
+-- lua/lsp/configs/lua_ls.lua
 -- Lua 语言服务器配置
--- 兼容 Neovim 0.12 的新 LSP API
+
 return {
-  cmd = {"lua-language-server"},
-  filetypes = {"lua"},
-  root_markers = {".git"},
   settings = {
     Lua = {
       runtime = {
-        version = "LuaJIT",
+        version = 'LuaJIT',
       },
       diagnostics = {
-        globals = {"vim"},
+        globals = { 'vim' },
+        disable = { 'different-requires' },
       },
       workspace = {
         library = vim.api.nvim_get_runtime_file("", true),
@@ -18,6 +17,13 @@ return {
       },
       telemetry = {
         enable = false,
+      },
+      hint = {
+        enable = true,
+        setType = true,
+        paramType = true,
+        paramName = true,
+        paramNamePrefix = "arg: ",
       },
     },
   },
