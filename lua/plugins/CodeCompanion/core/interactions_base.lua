@@ -386,10 +386,6 @@ M.config = {
     },
   },
 
-  shared = {
-    keymaps = require("core.keymaps").codecompanion().diffy(),
-  },
-
   cmd = {
     adapter = {
       name = "step",
