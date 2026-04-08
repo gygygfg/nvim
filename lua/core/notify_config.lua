@@ -178,6 +178,9 @@ M.show_history = function()
   vim.api.nvim_buf_set_option(buf, 'readonly', true)
   vim.api.nvim_buf_set_option(buf, 'filetype', 'markdown')
 
+  -- 自动滚动到最下面
+  vim.api.nvim_win_set_cursor(win, { #lines, 0 })
+
   -- 设置高亮
   vim.api.nvim_buf_add_highlight(buf, -1, 'Title', 0, 0, -1)
 
@@ -191,11 +194,11 @@ M.show_history = function()
     end
   end
 
-  vim.api.nvim_buf_set_keymap(buf, 'n', 'q', '<cmd>lua require("notify_config")._close_current_window()<CR>',
+  vim.api.nvim_buf_set_keymap(buf, 'n', 'q', '<cmd>lua require("core.notify_config")._close_current_window()<CR>',
     { noremap = true, silent = true })
-  vim.api.nvim_buf_set_keymap(buf, 'n', '<ESC>', '<cmd>lua require("notify_config")._close_current_window()<CR>',
+  vim.api.nvim_buf_set_keymap(buf, 'n', '<ESC>', '<cmd>lua require("core.notify_config")._close_current_window()<CR>',
     { noremap = true, silent = true })
-  vim.api.nvim_buf_set_keymap(buf, 'n', '<CR>', '<cmd>lua require("notify_config")._close_current_window()<CR>',
+  vim.api.nvim_buf_set_keymap(buf, 'n', '<CR>', '<cmd>lua require("core.notify_config")._close_current_window()<CR>',
     { noremap = true, silent = true })
 
   -- 保存窗口和缓冲区引用
@@ -229,7 +232,7 @@ M._close_current_window = function()
 end
 
 -- 创建用户命令
-vim.api.nvim_create_user_command('NotifyHistory', function()
+vim.api.nvim_create_user_command('NotifiCations', function()
   -- 如果已有窗口打开，先关闭它
   if M._current_window and vim.api.nvim_win_is_valid(M._current_window) then
     M._close_current_window()
@@ -241,12 +244,12 @@ vim.api.nvim_create_user_command('NotifyHistory', function()
   end
 end, { desc = '查看历史消息' })
 
-vim.api.nvim_create_user_command('NotifyHistoryClear', function()
+vim.api.nvim_create_user_command('NotifiCationsClear', function()
   M.clear_history()
   vim.notify('Notification history cleared', vim.log.levels.INFO)
 end, { desc = '清除历史消息' })
 
-vim.api.nvim_create_user_command('NotifyHistoryCount', function()
+vim.api.nvim_create_user_command('NotifiCationsCount', function()
   local count = #message_history
   vim.notify(string.format('Notification history: %d messages', count), vim.log.levels.INFO)
 end, { desc = '查看历史消息数量' })

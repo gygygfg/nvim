@@ -7,12 +7,13 @@
 -- ============================================
 
 vim.pack.add({
-  -- gitsigns.nvim - Git 状态显示
-  { src = "https://github.com/lewis6991/gitsigns.nvim" },
-  -- diffview.nvim - Git diff 查看
-  { src = "https://github.com/sindrets/diffview.nvim" },
+  -- Git 集成
   -- fugitive.vim - Git 集成
-  { src = "https://github.com/tpope/vim-fugitive" },
+  gh("tpope/vim-fugitive"),
+  -- diffview.nvim - Git diff 查看
+  gh("sindrets/diffview.nvim"),
+  -- gitsigns.nvim - Git 状态显示
+  gh("lewis6991/gitsigns.nvim"),
 })
 
 -- ============================================
@@ -58,7 +59,7 @@ local function smart_git_error_handler(data, error_type)
     "^Writing objects:",
     "^Enumerating objects:",
     "^Pack%-reused:",
-    "^Reusing existing pack"
+    "^Reusing existing pack",
   }
 
   -- 错误模式：识别真正的错误信息
@@ -70,7 +71,7 @@ local function smart_git_error_handler(data, error_type)
     "conflict",
     "CONFLICT",
     "merge conflict",
-    "Automatic merge failed"
+    "Automatic merge failed",
   }
 
   -- 首先检查是否是真正的错误
@@ -152,7 +153,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
             vim.cmd("Gdiff")
           end, 100)
         end
-      end
+      end,
     })
 
     vim.keymap.set("n", "<leader>gbb", function()
@@ -215,9 +216,12 @@ vim.api.nvim_create_autocmd("VimEnter", {
         if change_count <= 3 then
           message = message .. ":\n" .. table.concat(changes, "\n")
         else
-          message = message ..
-              "（前3个）:\n" ..
-              table.concat({ unpack(changes, 1, 3) }, "\n") .. "\n... 还有 " .. (change_count - 3) .. " 个文件"
+          message = message
+            .. "（前3个）:\n"
+            .. table.concat({ unpack(changes, 1, 3) }, "\n")
+            .. "\n... 还有 "
+            .. (change_count - 3)
+            .. " 个文件"
         end
 
         vim.notify(message, vim.log.levels.WARN)
@@ -266,15 +270,15 @@ vim.api.nvim_create_autocmd("VimEnter", {
                 vim.fn.jobstart({ "git", "push", "origin", branch, "--verbose" }, {
                   on_stderr = function(_, data)
                     smart_git_error_handler(data, "推送错误")
-                  end
+                  end,
                 })
               end
-            end
+            end,
           })
         end,
         on_stderr = function(_, data)
           smart_git_error_handler(data, "rebase 错误")
-        end
+        end,
       })
     end, { desc = "使用 rebase 合并并推送当前分支（静默模式）" })
 
@@ -290,21 +294,18 @@ vim.api.nvim_create_autocmd("VimEnter", {
             actions.close(prompt_bufnr)
 
             if selection then
-              vim.ui.input(
-                { prompt = "确认硬重置到 " .. selection.value .. "? (y/N): " },
-                function(confirm)
-                  if confirm and confirm:lower() == "y" then
-                    vim.cmd("!git reset --hard " .. selection.value)
-                    vim.notify("✅ 已硬重置到提交: " .. selection.value, vim.log.levels.INFO)
-                  else
-                    vim.notify("❌ 操作已取消", vim.log.levels.INFO)
-                  end
+              vim.ui.input({ prompt = "确认硬重置到 " .. selection.value .. "? (y/N): " }, function(confirm)
+                if confirm and confirm:lower() == "y" then
+                  vim.cmd("!git reset --hard " .. selection.value)
+                  vim.notify("✅ 已硬重置到提交: " .. selection.value, vim.log.levels.INFO)
+                else
+                  vim.notify("❌ 操作已取消", vim.log.levels.INFO)
                 end
-              )
+              end)
             end
           end)
           return true
-        end
+        end,
       })
     end, { desc = "硬重置整个项目到指定提交" })
 
@@ -340,7 +341,10 @@ vim.api.nvim_create_autocmd("VimEnter", {
         vim.notify("✅ 本地分支与远程分支同步，没有需要推送的提交", vim.log.levels.INFO)
       else
         local count = select(2, local_ahead:gsub("\n", ""))
-        vim.notify("📊 本地有 " .. count .. " 个提交需要推送到 GitHub:\n" .. local_ahead, vim.log.levels.INFO)
+        vim.notify(
+          "📊 本地有 " .. count .. " 个提交需要推送到 GitHub:\n" .. local_ahead,
+          vim.log.levels.INFO
+        )
       end
 
       -- 检查最近一次推送状态
@@ -349,7 +353,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
           if exit_code == 0 and data and #data > 0 then
             vim.notify("最近提交: " .. data[1], vim.log.levels.INFO)
           end
-        end
+        end,
       })
     end, { desc = "检查 GitHub 推送状态" })
 
@@ -389,8 +393,15 @@ vim.api.nvim_create_autocmd("VimEnter", {
           local alt_exists = check_branch_exists(alternative_branch)
 
           if alt_exists == "0" then
-            local use_alt = vim.fn.input("分支 " ..
-              target_branch .. " 不存在，但存在 " .. alternative_branch .. " 分支，是否切换到 " .. alternative_branch .. "？(y/n): ")
+            local use_alt = vim.fn.input(
+              "分支 "
+                .. target_branch
+                .. " 不存在，但存在 "
+                .. alternative_branch
+                .. " 分支，是否切换到 "
+                .. alternative_branch
+                .. "？(y/n): "
+            )
             if use_alt:lower() == "y" then
               actual_branch = alternative_branch
               branch_exists = "0"
@@ -421,12 +432,15 @@ vim.api.nvim_create_autocmd("VimEnter", {
                 }, function(input)
                   if input and input ~= "" then
                     -- 使用安全的 git commit 函数，启用自动暂存
-                    local success, commit_hash_or_error, result = git_commit.safe_git_commit(input,
-                      { auto_stage = true })
+                    local success, commit_hash_or_error, result =
+                      git_commit.safe_git_commit(input, { auto_stage = true })
 
                     if success then
                       if commit_hash_or_error ~= "" then
-                        vim.notify("✅ 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. input, vim.log.levels.INFO)
+                        vim.notify(
+                          "✅ 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. input,
+                          vim.log.levels.INFO
+                        )
                       else
                         vim.notify("✅ 提交成功: " .. input, vim.log.levels.INFO)
                       end
@@ -446,13 +460,15 @@ vim.api.nvim_create_autocmd("VimEnter", {
                         }, function(final_input)
                           if final_input and final_input ~= "" then
                             -- 使用安全的 git commit 函数，启用自动暂存
-                            local success, commit_hash_or_error, result = git_commit.safe_git_commit(final_input,
-                              { auto_stage = true })
+                            local success, commit_hash_or_error, result =
+                              git_commit.safe_git_commit(final_input, { auto_stage = true })
 
                             if success then
                               if commit_hash_or_error ~= "" then
-                                vim.notify("✅ AI 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. final_input,
-                                  vim.log.levels.INFO)
+                                vim.notify(
+                                  "✅ AI 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. final_input,
+                                  vim.log.levels.INFO
+                                )
                               else
                                 vim.notify("✅ AI 提交成功: " .. final_input, vim.log.levels.INFO)
                               end
@@ -477,7 +493,11 @@ vim.api.nvim_create_autocmd("VimEnter", {
             vim.notify("错误信息: " .. output, vim.log.levels.ERROR)
 
             -- 检查是否是未提交更改导致的错误
-            if output:match("Your local changes") or output:match("overwritten by checkout") or output:match("uncommitted changes") then
+            if
+              output:match("Your local changes")
+              or output:match("overwritten by checkout")
+              or output:match("uncommitted changes")
+            then
               vim.notify("🔧 检测到未提交的更改阻止分支切换", vim.log.levels.WARN)
 
               -- 显示未提交的文件
@@ -541,12 +561,15 @@ vim.api.nvim_create_autocmd("VimEnter", {
                 }, function(input)
                   if input and input ~= "" then
                     -- 使用安全的 git commit 函数，启用自动暂存
-                    local success, commit_hash_or_error, result = git_commit.safe_git_commit(input,
-                      { auto_stage = true })
+                    local success, commit_hash_or_error, result =
+                      git_commit.safe_git_commit(input, { auto_stage = true })
 
                     if success then
                       if commit_hash_or_error ~= "" then
-                        vim.notify("✅ 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. input, vim.log.levels.INFO)
+                        vim.notify(
+                          "✅ 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. input,
+                          vim.log.levels.INFO
+                        )
 
                         -- 提交成功后重新尝试切换分支
                         vim.notify("重新尝试切换到分支: " .. actual_branch, vim.log.levels.INFO)
@@ -575,13 +598,15 @@ vim.api.nvim_create_autocmd("VimEnter", {
                         }, function(final_input)
                           if final_input and final_input ~= "" then
                             -- 使用安全的 git commit 函数，启用自动暂存
-                            local success, commit_hash_or_error, result = git_commit.safe_git_commit(final_input,
-                              { auto_stage = true })
+                            local success, commit_hash_or_error, result =
+                              git_commit.safe_git_commit(final_input, { auto_stage = true })
 
                             if success then
                               if commit_hash_or_error ~= "" then
-                                vim.notify("✅ AI 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. final_input,
-                                  vim.log.levels.INFO)
+                                vim.notify(
+                                  "✅ AI 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. final_input,
+                                  vim.log.levels.INFO
+                                )
 
                                 -- 提交成功后重新尝试切换分支
                                 vim.notify("重新尝试切换到分支: " .. actual_branch, vim.log.levels.INFO)
@@ -609,7 +634,8 @@ vim.api.nvim_create_autocmd("VimEnter", {
                 end)
               elseif choice == "3" then
                 -- 放弃更改
-                local confirm = vim.fn.input("⚠️  确定要丢弃所有未提交的更改吗？(输入 'yes' 确认): ")
+                local confirm =
+                  vim.fn.input("⚠️  确定要丢弃所有未提交的更改吗？(输入 'yes' 确认): ")
                 if confirm:lower() == "yes" then
                   vim.notify("正在丢弃更改...", vim.log.levels.WARN)
                   local reset_output = vim.fn.system({ "git", "checkout", "--", "." })
@@ -636,14 +662,18 @@ vim.api.nvim_create_autocmd("VimEnter", {
                 vim.notify("无效选项，操作已取消", vim.log.levels.WARN)
               end
             elseif output:match("not found") then
-              vim.notify("提示：分支可能不存在，尝试使用 git branch -a 查看所有分支", vim.log.levels.INFO)
+              vim.notify(
+                "提示：分支可能不存在，尝试使用 git branch -a 查看所有分支",
+                vim.log.levels.INFO
+              )
             else
               vim.notify("未知错误，请检查 git 输出", vim.log.levels.ERROR)
             end
           end
         else
           -- 分支不存在，创建新分支
-          local create_choice = vim.fn.input("分支 " .. actual_branch .. " 不存在，是否创建新分支？(y/n): ")
+          local create_choice =
+            vim.fn.input("分支 " .. actual_branch .. " 不存在，是否创建新分支？(y/n): ")
           if create_choice:lower() == "y" then
             vim.notify("正在创建新分支: " .. actual_branch, vim.log.levels.INFO)
 
@@ -666,13 +696,15 @@ vim.api.nvim_create_autocmd("VimEnter", {
                   }, function(input)
                     if input and input ~= "" then
                       -- 使用安全的 git commit 函数，启用自动暂存
-                      local success, commit_hash_or_error, result = git_commit.safe_git_commit(input,
-                        { auto_stage = true })
+                      local success, commit_hash_or_error, result =
+                        git_commit.safe_git_commit(input, { auto_stage = true })
 
                       if success then
                         if commit_hash_or_error ~= "" then
-                          vim.notify("✅ 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. input,
-                            vim.log.levels.INFO)
+                          vim.notify(
+                            "✅ 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. input,
+                            vim.log.levels.INFO
+                          )
                         else
                           vim.notify("✅ 提交成功: " .. input, vim.log.levels.INFO)
                         end
@@ -692,13 +724,15 @@ vim.api.nvim_create_autocmd("VimEnter", {
                           }, function(final_input)
                             if final_input and final_input ~= "" then
                               -- 使用安全的 git commit 函数，启用自动暂存
-                              local success, commit_hash_or_error, result = git_commit.safe_git_commit(final_input,
-                                { auto_stage = true })
+                              local success, commit_hash_or_error, result =
+                                git_commit.safe_git_commit(final_input, { auto_stage = true })
 
                               if success then
                                 if commit_hash_or_error ~= "" then
-                                  vim.notify("✅ AI 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. final_input,
-                                    vim.log.levels.INFO)
+                                  vim.notify(
+                                    "✅ AI 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. final_input,
+                                    vim.log.levels.INFO
+                                  )
                                 else
                                   vim.notify("✅ AI 提交成功: " .. final_input, vim.log.levels.INFO)
                                 end
@@ -724,7 +758,10 @@ vim.api.nvim_create_autocmd("VimEnter", {
 
               -- 提供可能的解决方案
               if output:match("already exists") then
-                vim.notify("提示：分支可能已存在，尝试使用 git branch -a 查看所有分支", vim.log.levels.INFO)
+                vim.notify(
+                  "提示：分支可能已存在，尝试使用 git branch -a 查看所有分支",
+                  vim.log.levels.INFO
+                )
               elseif output:match("uncommitted changes") then
                 vim.notify("提示：有未提交的更改，请先提交或暂存更改", vim.log.levels.INFO)
               end
@@ -737,5 +774,5 @@ vim.api.nvim_create_autocmd("VimEnter", {
       -- 如果不是分离头指针，执行正常的推送
       vim.notify("当前已在正常分支上，使用 <leader>gpp 进行推送", vim.log.levels.INFO)
     end, { desc = "修复分离头指针并准备推送" })
-  end
+  end,
 })

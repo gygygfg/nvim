@@ -1,7 +1,21 @@
 -- ~/.config/nvim/lua/lsp/init.lua
--- 稳定的 LSP 配置
+-- 集成 conform.nvim 的 LSP 配置
 
 local M = {}
+
+vim.pack.add({
+  -- LSP 相关
+  gh("j-hui/fidget.nvim"),
+  gh("stevearc/dressing.nvim"),
+  gh("folke/trouble.nvim"),
+  gh("folke/which-key.nvim"),
+  gh("neovim/nvim-lspconfig"), -- 虽然0.12有内置lsp，但这个插件提供更好配置
+  -- Mason 和相关插件
+  gh("williamboman/mason.nvim"),
+  gh("williamboman/mason-lspconfig.nvim"),
+  -- Formatter & Linter
+  gh("stevearc/conform.nvim"),
+})
 
 M.filetype_to_lsp = {
   -- 文件类型到 LSP 服务器的映射
@@ -29,22 +43,48 @@ M.filetype_to_lsp = {
   tex = "texlab",
 }
 
+-- 格式化工具配置
+M.formatters_by_ft = {
+  lua = { "stylua" },
+  python = { "black", "isort" },
+  javascript = { "prettierd", "prettier" },
+  typescript = { "prettierd", "prettier" },
+  javascriptreact = { "prettierd", "prettier" },
+  typescriptreact = { "prettierd", "prettier" },
+  html = { "prettierd", "prettier" },
+  css = { "prettierd", "prettier" },
+  json = { "prettierd", "prettier" },
+  yaml = { "yamlfmt" },
+  yml = { "yamlfmt" },
+  bash = { "shfmt" },
+  sh = { "shfmt" },
+  c = { "clang-format" },
+  cpp = { "clang-format" },
+  go = { "gofumpt", "goimports" },
+  rust = { "rustfmt" },
+  java = { "google-java-format" },
+  markdown = { "prettierd", "prettier" },
+  sql = { "sql-formatter" },
+  tex = { "latexindent" },
+  ["*"] = { "codespell" }, -- 拼写检查
+}
+
 M.server_configs = {
   -- LSP 服务器配置
   lua_ls = {
     settings = {
       Lua = {
-        runtime = { version = 'LuaJIT' },
+        runtime = { version = "LuaJIT" },
         diagnostics = {
-          globals = { 'vim' },
-          disable = { 'different-requires' }
+          globals = { "vim" },
+          disable = { "different-requires" },
         },
         workspace = {
           library = vim.api.nvim_get_runtime_file("", true),
-          checkThirdParty = false
+          checkThirdParty = false,
         },
-        telemetry = { enable = false }
-      }
+        telemetry = { enable = false },
+      },
     },
     single_file_support = true,
   },
@@ -55,9 +95,9 @@ M.server_configs = {
         analysis = {
           typeCheckingMode = "basic",
           autoSearchPaths = true,
-          useLibraryCodeForTypes = true
-        }
-      }
+          useLibraryCodeForTypes = true,
+        },
+      },
     },
     single_file_support = true,
   },
@@ -65,11 +105,11 @@ M.server_configs = {
   tsserver = {
     settings = {
       typescript = {
-        format = { enable = true }
+        format = { enable = true },
       },
       javascript = {
-        format = { enable = true }
-      }
+        format = { enable = true },
+      },
     },
     single_file_support = true,
   },
@@ -107,10 +147,91 @@ M.server_configs = {
   },
 }
 
+-- 设置 conform.nvim
+local function setup_conform()
+  local conform_ok, conform = pcall(require, "conform")
+  if not conform_ok then
+    vim.notify("conform.nvim 插件未加载，请确保已安装", vim.log.levels.WARN)
+    return
+  end
+
+  conform.setup({
+    formatters_by_ft = M.formatters_by_ft,
+
+    -- 默认格式化选项
+    format_on_save = {
+      timeout_ms = 500,
+      lsp_fallback = true, -- 如果 LSP 支持格式化，也使用 LSP
+    },
+
+    -- 异步格式化
+    format_after_save = {
+      lsp_fallback = true,
+    },
+
+    -- 配置每个格式化器的选项
+    formatters = {
+      stylua = {
+        prepend_args = { "--indent-width", "2", "--indent-type", "Spaces" },
+      },
+      prettier = {
+        prepend_args = { "--single-quote", "--jsx-single-quote" },
+      },
+      prettierd = {
+        prepend_args = { "--single-quote", "--jsx-single-quote" },
+      },
+      black = {
+        prepend_args = { "--line-length", "88" },
+      },
+      isort = {
+        prepend_args = { "--profile", "black" },
+      },
+      shfmt = {
+        prepend_args = { "-i", "2" },
+      },
+      clang_format = {
+        prepend_args = { "--style", "{BasedOnStyle: Google, IndentWidth: 2}" },
+      },
+    },
+
+    -- 如果没有找到对应的格式化器，使用 LSP
+    fallback_conform = function(bufnr)
+      local clients = vim.lsp.get_clients({ bufnr = bufnr })
+      for _, client in ipairs(clients) do
+        if client.supports_method("textDocument/formatting") then
+          vim.lsp.buf.format({ async = false, bufnr = bufnr })
+          return true
+        end
+      end
+      return false
+    end,
+  })
+
+  -- 设置格式化快捷键
+  vim.keymap.set({ "n", "v" }, "<leader>f", function()
+    conform.format({ async = true, lsp_fallback = true })
+  end, { desc = "使用 conform.nvim 格式化" })
+
+  -- 查看当前文件的格式化器
+  vim.keymap.set("n", "<leader>F", function()
+    local ft = vim.bo.filetype
+    local formatters = M.formatters_by_ft[ft] or {}
+    local msg = "文件类型: " .. ft .. "\n可用的格式化器: "
+    if #formatters > 0 then
+      msg = msg .. table.concat(formatters, ", ")
+    else
+      msg = msg .. "无"
+    end
+    vim.notify(msg, vim.log.levels.INFO)
+  end, { desc = "查看格式化器" })
+
+  vim.notify("conform.nvim 已配置")
+end
+
 local function setup_global_keymaps()
   -- 设置全局按键映射
-  -- 悬停文档
-  vim.keymap.set('n', 'gK', function()
+  vim.keymap.set("n", "gK", function()
+    -- 悬停文档
     local bufnr = vim.api.nvim_get_current_buf()
     local clients = vim.lsp.get_clients({ bufnr = bufnr })
     if #clients > 0 then
@@ -118,10 +239,10 @@ local function setup_global_keymaps()
     else
       vim.notify("没有活动的 LSP 客户端", vim.log.levels.WARN)
     end
-  end, { desc = '显示悬停文档' })
+  end, { desc = "显示悬停文档" })
 
-  -- 跳转到定义
-  vim.keymap.set('n', 'gd', function()
+  vim.keymap.set("n", "gd", function()
+    -- 跳转到定义
     local bufnr = vim.api.nvim_get_current_buf()
     local clients = vim.lsp.get_clients({ bufnr = bufnr })
     if #clients > 0 then
@@ -129,10 +250,10 @@ local function setup_global_keymaps()
     else
       vim.notify("没有活动的 LSP 客户端", vim.log.levels.WARN)
     end
-  end, { desc = '跳转到定义' })
+  end, { desc = "跳转到定义" })
 
-  -- 代码操作
-  vim.keymap.set({ 'n', 'v' }, '<leader>ca', function()
+  vim.keymap.set({ "n", "v" }, "<leader>ca", function()
+    -- 代码操作
     local bufnr = vim.api.nvim_get_current_buf()
     local clients = vim.lsp.get_clients({ bufnr = bufnr })
     if #clients > 0 then
@@ -140,10 +261,10 @@ local function setup_global_keymaps()
     else
       vim.notify("没有活动的 LSP 客户端", vim.log.levels.WARN)
     end
-  end, { desc = '代码操作' })
+  end, { desc = "代码操作" })
 
-  -- 重命名
-  vim.keymap.set('n', '<leader>rn', function()
+  vim.keymap.set("n", "<leader>rn", function()
+    -- 重命名
     local bufnr = vim.api.nvim_get_current_buf()
     local clients = vim.lsp.get_clients({ bufnr = bufnr })
     if #clients > 0 then
@@ -151,43 +272,46 @@ local function setup_global_keymaps()
     else
       vim.notify("没有活动的 LSP 客户端", vim.log.levels.WARN)
     end
-  end, { desc = '重命名符号' })
+  end, { desc = "重命名符号" })
 
-  -- 格式化（安全版）
-  vim.keymap.set({ 'n', 'v' }, '<leader>cf', function()
-    local bufnr = vim.api.nvim_get_current_buf()
-    local clients = vim.lsp.get_clients({ bufnr = bufnr })
-
-    -- 检查是否有支持格式化的客户端
-    local formatting_clients = {}
-    for _, client in ipairs(clients) do
-      if client.supports_method("textDocument/formatting") then
-        table.insert(formatting_clients, client.name)
+  vim.keymap.set({ "n", "v" }, "<leader>cf", function()
+    -- 格式化（使用 conform.nvim）
+    local conform_ok, conform = pcall(require, "conform")
+    if conform_ok then
+      conform.format({ async = true, lsp_fallback = true })
+    else
+      -- 回退到 LSP 格式化
+      local bufnr = vim.api.nvim_get_current_buf()
+      local clients = vim.lsp.get_clients({ bufnr = bufnr })
+      local formatting_clients = {}
+      for _, client in ipairs(clients) do
+        if client.supports_method("textDocument/formatting") then
+          table.insert(formatting_clients, client.name)
+        end
+      end
+      if #formatting_clients > 0 then
+        vim.lsp.buf.format({ async = true })
+        vim.notify("正在格式化... (" .. table.concat(formatting_clients, ", ") .. ")", vim.log.levels.INFO)
+      else
+        vim.notify("没有找到可用的格式化器", vim.log.levels.WARN)
       end
     end
-
-    if #formatting_clients > 0 then
-      vim.lsp.buf.format({ async = true })
-      vim.notify("正在格式化... (" .. table.concat(formatting_clients, ", ") .. ")", vim.log.levels.INFO)
-    else
-      vim.notify("没有支持格式化的 LSP 客户端", vim.log.levels.WARN)
-    end
-  end, { desc = '格式化文档' })
+  end, { desc = "格式化文档" })
 
   -- 查看引用
-  vim.keymap.set('n', 'gr', vim.lsp.buf.references, { desc = '查看引用' })
+  vim.keymap.set("n", "gr", vim.lsp.buf.references, { desc = "查看引用" })
   -- 查看实现
-  vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, { desc = '查看实现' })
+  vim.keymap.set("n", "gi", vim.lsp.buf.implementation, { desc = "查看实现" })
   -- 类型定义
-  vim.keymap.set('n', 'gt', vim.lsp.buf.type_definition, { desc = '跳转到类型定义' })
+  vim.keymap.set("n", "gt", vim.lsp.buf.type_definition, { desc = "跳转到类型定义" })
   -- 签名帮助
-  vim.keymap.set('i', '<C-k>', vim.lsp.buf.signature_help, { desc = '签名帮助' })
+  vim.keymap.set("i", "<C-k>", vim.lsp.buf.signature_help, { desc = "签名帮助" })
   vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action)
   vim.keymap.set("n", "gh", vim.lsp.buf.hover)
   vim.keymap.set("n", "g[", vim.diagnostic.goto_prev)
   vim.keymap.set("n", "g]", vim.diagnostic.goto_next)
-  vim.keymap.set('n', 'go', vim.diagnostic.open_float)
-  vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist)
+  vim.keymap.set("n", "go", vim.diagnostic.open_float)
+  vim.keymap.set("n", "<leader>q", vim.diagnostic.setloclist)
 end
 
 local function setup_diagnostics()
@@ -214,7 +338,7 @@ local function setup_diagnostics()
     Error = "",
     Warn = "",
     Hint = "",
-    Info = ""
+    Info = "",
   }
 
   for type, icon in pairs(signs) do
@@ -257,6 +381,9 @@ function M.setup()
   -- 设置全局按键映射
   setup_global_keymaps()
 
+  -- 设置 conform.nvim
+  setup_conform()
+
   -- 文件类型自动命令
   vim.api.nvim_create_autocmd("FileType", {
     group = vim.api.nvim_create_augroup("LSPFileType", { clear = true }),
@@ -284,35 +411,46 @@ function M.setup()
     end,
   })
 
-  -- 保存时自动格式化
+  -- 保存时自动格式化（使用 conform.nvim）
   vim.api.nvim_create_autocmd("BufWritePre", {
     group = vim.api.nvim_create_augroup("LSPAutoFormat", { clear = true }),
     callback = function(args)
       local bufnr = args.buf
-      local clients = vim.lsp.get_clients({ bufnr = bufnr })
+      local ft = vim.bo[bufnr].filetype
 
-      -- 检查是否有支持格式化的客户端
-      local can_format = false
-      for _, client in ipairs(clients) do
-        if client.supports_method("textDocument/formatting") then
-          can_format = true
-          break
-        end
-      end
+      -- 检查是否有对应的格式化器
+      local formatters = M.formatters_by_ft[ft] or M.formatters_by_ft["*"] or {}
 
-      if can_format and vim.g.auto_format ~= false then
-        -- 使用 pcall 避免格式化失败导致保存失败
-        local success = pcall(vim.lsp.buf.format, {
-          async = false,
-          bufnr = bufnr,
-          -- 优先使用 none-ls 的格式化
-          filter = function(client)
-            return client.name == "null-ls" or client.supports_method("textDocument/formatting")
+      if #formatters > 0 and vim.g.auto_format ~= false then
+        local conform_ok, conform = pcall(require, "conform")
+        if conform_ok then
+          -- 使用 conform.nvim 格式化
+          local success = pcall(conform.format, {
+            async = false,
+            bufnr = bufnr,
+            lsp_fallback = true,
+            timeout_ms = 1000,
+          })
+
+          if not success then
+            -- 如果 conform 格式化失败，尝试 LSP
+            local clients = vim.lsp.get_clients({ bufnr = bufnr })
+            for _, client in ipairs(clients) do
+              if client.supports_method("textDocument/formatting") then
+                pcall(vim.lsp.buf.format, { async = false, bufnr = bufnr })
+                break
+              end
+            end
           end
-        })
-
-        if not success then
-          vim.notify("自动格式化失败", vim.log.levels.WARN)
+        else
+          -- 回退到 LSP 格式化
+          local clients = vim.lsp.get_clients({ bufnr = bufnr })
+          for _, client in ipairs(clients) do
+            if client.supports_method("textDocument/formatting") then
+              pcall(vim.lsp.buf.format, { async = false, bufnr = bufnr })
+              break
+            end
+          end
         end
       end
     end,
@@ -321,7 +459,7 @@ function M.setup()
   -- 初始化 Mason
   M.setup_mason()
 
-  vim.notify("LSP 配置已加载")
+  vim.notify("LSP 和 conform.nvim 配置已加载")
 end
 
 function M.setup_mason()
@@ -338,14 +476,15 @@ function M.setup_mason()
       icons = {
         package_installed = "✓",
         package_pending = "➜",
-        package_uninstalled = "✗"
-      }
-    }
+        package_uninstalled = "✗",
+      },
+    },
   })
 
-  -- 安装推荐的 LSP 服务器
+  -- 安装推荐的 LSP 服务器和格式化工具
   vim.defer_fn(function()
     M.ensure_lsp_servers()
+    M.ensure_formatters()
   end, 1000)
 end
 
@@ -384,10 +523,78 @@ function M.ensure_lsp_servers()
   end
 
   if #to_install > 0 then
-    vim.notify("有 " .. #to_install .. " 个 LSP 服务器需要安装，运行 :LspInstallMissing 安装", vim.log.levels.INFO)
-    vim.cmd(':LspInstallMissing')
+    vim.notify(
+      "有 " .. #to_install .. " 个 LSP 服务器需要安装，运行 :LspInstallMissing 安装",
+      vim.log.levels.INFO
+    )
+    vim.cmd(":LspInstallMissing")
   else
     vim.notify("所有 LSP 服务器已安装 (" .. installed .. " 个)", vim.log.levels.INFO)
+  end
+end
+
+function M.ensure_formatters()
+  -- 确保格式化工具已安装
+  local mason_registry_ok, mason_registry = pcall(require, "mason-registry")
+  if not mason_registry_ok then
+    return
+  end
+
+  -- 格式化器映射表
+  local formatter_to_mason = {
+    stylua = "stylua",
+    prettier = "prettier",
+    prettierd = "prettierd",
+    black = "black",
+    isort = "isort",
+    yamlfmt = "yamlfmt",
+    shfmt = "shfmt",
+    ["clang-format"] = "clang-format",
+    gofumpt = "gofumpt",
+    goimports = "gofmt", -- gofmt 包含 goimports
+    rustfmt = "rustfmt",
+    ["google-java-format"] = "google-java-format",
+    ["sql-formatter"] = "sql-formatter",
+    latexindent = "latexindent",
+    codespell = "codespell",
+  }
+
+  local installed = 0
+  local to_install = {}
+
+  -- 收集需要安装的格式化工具
+  for _, formatters in pairs(M.formatters_by_ft) do
+    for _, formatter in ipairs(formatters) do
+      local mason_name = formatter_to_mason[formatter]
+      if mason_name then
+        local ok, pkg = pcall(mason_registry.get_package, mason_name)
+        if ok and pkg:is_installed() then
+          installed = installed + 1
+        elseif ok then
+          -- 避免重复添加
+          local already_in_list = false
+          for _, item in ipairs(to_install) do
+            if item[2] == mason_name then
+              already_in_list = true
+              break
+            end
+          end
+          if not already_in_list then
+            table.insert(to_install, { formatter, mason_name })
+          end
+        end
+      end
+    end
+  end
+
+  if #to_install > 0 then
+    vim.notify(
+      "有 " .. #to_install .. " 个格式化工具需要安装，运行 :FormatterInstallMissing 安装",
+      vim.log.levels.INFO
+    )
+    vim.cmd("FormatterInstallMissing")
+  else
+    vim.notify("所有格式化工具已安装 (" .. installed .. " 个)", vim.log.levels.INFO)
   end
 end
 
@@ -430,6 +637,49 @@ vim.api.nvim_create_user_command("LspInstallMissing", function()
   end
 end, { desc = "安装缺失的 LSP 服务器" })
 
+vim.api.nvim_create_user_command("FormatterInstallMissing", function()
+  -- 安装缺失的格式化工具
+  local mason_registry_ok, mason_registry = pcall(require, "mason-registry")
+  if not mason_registry_ok then
+    vim.notify("无法访问 Mason 注册表", vim.log.levels.ERROR)
+    return
+  end
+
+  local formatter_to_mason = {
+    stylua = "stylua",
+    prettier = "prettier",
+    prettierd = "prettierd",
+    black = "black",
+    isort = "isort",
+    yamlfmt = "yamlfmt",
+    shfmt = "shfmt",
+    ["clang-format"] = "clang-format",
+    gofumpt = "gofumpt",
+    goimports = "gofmt",
+    rustfmt = "rustfmt",
+    ["google-java-format"] = "google-java-format",
+    ["sql-formatter"] = "sql-formatter",
+    latexindent = "latexindent",
+    codespell = "codespell",
+  }
+
+  local installed = 0
+  for formatter, mason_name in pairs(formatter_to_mason) do
+    local ok, pkg = pcall(mason_registry.get_package, mason_name)
+    if ok and not pkg:is_installed() then
+      pkg:install()
+      vim.notify("正在安装: " .. mason_name .. " (" .. formatter .. ")", vim.log.levels.INFO)
+      installed = installed + 1
+    end
+  end
+
+  if installed > 0 then
+    vim.notify("已开始安装 " .. installed .. " 个格式化工具", vim.log.levels.INFO)
+  else
+    vim.notify("所有格式化工具已安装", vim.log.levels.INFO)
+  end
+end, { desc = "安装缺失的格式化工具" })
+
 vim.api.nvim_create_user_command("LspStatus", function()
   local bufnr = vim.api.nvim_get_current_buf()
   local clients = vim.lsp.get_clients({ bufnr = bufnr })
@@ -449,6 +699,18 @@ vim.api.nvim_create_user_command("LspStatus", function()
   local server_name = M.filetype_to_lsp[vim.bo.filetype]
   if server_name then
     print("配置的 LSP 服务器: " .. server_name)
+  end
+
+  -- 显示格式化器信息
+  local conform_ok, conform = pcall(require, "conform")
+  if conform_ok then
+    local ft = vim.bo.filetype
+    local formatters = M.formatters_by_ft[ft] or {}
+    if #formatters > 0 then
+      print("配置的格式化器: " .. table.concat(formatters, ", "))
+    else
+      print("配置的格式化器: 无")
+    end
   end
 end, { desc = "显示 LSP 状态" })
 

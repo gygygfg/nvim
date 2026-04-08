@@ -1,4 +1,14 @@
 -- lua/config/cmp.lua
+vim.pack.add({
+  -- 补全相关
+  gh("hrsh7th/nvim-cmp"),
+  gh("hrsh7th/cmp-path"),
+  gh("L3MON4D3/LuaSnip"),
+  gh("hrsh7th/cmp-buffer"),
+  gh("hrsh7th/cmp-cmdline"),
+  gh("hrsh7th/cmp-nvim-lsp"),
+  gh("saadparwaiz1/cmp_luasnip"),
+})
 
 local function _cmp_setup()
   -- nvim-cmp 自动补全配置
@@ -17,23 +27,22 @@ local function _cmp_setup()
       documentation = cmp.config.window.bordered(),
     },
     mapping = cmp.mapping.preset.insert({
-      ['<C-b>'] = cmp.mapping.scroll_docs(-4),
-      ['<C-f>'] = cmp.mapping.scroll_docs(4),
-      ['<CR>'] = cmp.mapping.confirm({ select = true, behavior = cmp.ConfirmBehavior.Replace }),
-      ['<C-.>'] = cmp.mapping(cmp.mapping.complete(), { "i", "c" }),
-      ['<C-,>'] = cmp.mapping({
+      ["<C-b>"] = cmp.mapping.scroll_docs(-4),
+      ["<C-f>"] = cmp.mapping.scroll_docs(4),
+      ["<CR>"] = cmp.mapping.confirm({ select = true, behavior = cmp.ConfirmBehavior.Replace }),
+      ["<C-.>"] = cmp.mapping(cmp.mapping.complete(), { "i", "c" }),
+      ["<C-,>"] = cmp.mapping({
         i = cmp.mapping.abort(),
         c = cmp.mapping.close(),
       }),
-      ['<Tab>'] = cmp.mapping(function(fallback)
+      ["<Tab>"] = cmp.mapping(function(fallback)
         local has_words_before = function()
           local buftype = vim.api.nvim_get_option_value("buftype", { buf = 0 })
           if buftype == "prompt" or buftype == "nofile" then
             return false
           end
           local line, col = unpack(vim.api.nvim_win_get_cursor(0))
-          return col ~= 0
-              and vim.api.nvim_buf_get_text(0, line - 1, 0, line - 1, col, {})[1]:match("^%s*$") == nil
+          return col ~= 0 and vim.api.nvim_buf_get_text(0, line - 1, 0, line - 1, col, {})[1]:match("^%s*$") == nil
         end
 
         if cmp.visible() then
@@ -46,7 +55,7 @@ local function _cmp_setup()
           fallback()
         end
       end, { "i", "s", "c" }),
-      ['<S-Tab>'] = cmp.mapping(function(fallback)
+      ["<S-Tab>"] = cmp.mapping(function(fallback)
         if cmp.visible() then
           cmp.select_prev_item()
         elseif luasnip.jumpable(-1) then
@@ -57,10 +66,10 @@ local function _cmp_setup()
       end, { "i", "s" }),
     }),
     sources = cmp.config.sources({
-      { name = 'luasnip' },
-      { name = 'nvim_lsp' },
-      { name = 'path' },
-      { name = 'buffer' },
+      { name = "luasnip" },
+      { name = "nvim_lsp" },
+      { name = "path" },
+      { name = "buffer" },
     }),
     sorting = {
       comparators = {
@@ -85,20 +94,20 @@ local function _cmp_setup()
   })
 
   -- 加载 cmp-cmdline 插件（因为它是 opt 包）
-  vim.cmd.packadd('cmp-cmdline')
+  vim.cmd.packadd("cmp-cmdline")
 
-  cmp.setup.cmdline(':', {
+  cmp.setup.cmdline(":", {
     mapping = cmp.mapping.preset.cmdline(),
     sources = cmp.config.sources({
-      { name = 'path' }
+      { name = "path" },
     }, {
       {
-        name = 'cmdline',
+        name = "cmdline",
         option = {
-          ignore_cmds = { 'Man', '!' }
-        }
-      }
-    })
+          ignore_cmds = { "Man", "!" },
+        },
+      },
+    }),
   })
 end
 
@@ -106,5 +115,5 @@ vim.api.nvim_create_autocmd({ "insertEnter", "CmdlineChanged" }, {
   once = true,
   callback = function()
     _cmp_setup()
-  end
+  end,
 })
