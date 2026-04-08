@@ -26,10 +26,10 @@ vim.api.nvim_create_autocmd("VimEnter", {
   end,
 })
 
-vim.api.nvim_create_user_command("NvimTreeToggle", function()
-  -- 文件浏览器 - 按需加载
-  require('plugins.nvim_tree').toggle()
-end, { desc = "切换文件浏览器" })
+-- vim.api.nvim_create_user_command("NvimTreeToggle", function()
+--   -- 文件浏览器 - 按需加载
+--   require('plugins.nvim_tree').toggle()
+-- end, { desc = "切换文件浏览器" })
 
 vim.api.nvim_create_user_command("TelescopeFind", function()
   -- Telescope - 按需加载

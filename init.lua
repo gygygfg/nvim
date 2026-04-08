@@ -18,7 +18,7 @@ ensure_dir(vim.fn.stdpath("data") .. "/site/pack/core/opt")
 -- 所有插件默认放置在 opt/ 目录，按需加载
 
 -- 辅助函数：简化 GitHub 地址书写
-local gh = function(x)
+_G.gh = function(x)
   return 'https://github.com/' .. x
 end
 
@@ -62,6 +62,9 @@ vim.pack.add({
   -- Mason 和相关插件
   gh('williamboman/mason.nvim'),
   gh('williamboman/mason-lspconfig.nvim'),
+  -- Formatter & Linter
+  gh('nvimtools/none-ls.nvim'),
+  gh('jay-babu/mason-null-ls.nvim'),
   -- 如果需要补全，可以添加这些插件
   gh('hrsh7th/nvim-cmp'),
   gh('hrsh7th/cmp-nvim-lsp'),

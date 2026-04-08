@@ -39,6 +39,7 @@ _set_keymap('n', '<leader>fg', function()
   require('plugins.telescope').setup()
   require('telescope.builtin').live_grep()
 end, { desc = '搜索文本' })
+_set_keymap('n', '<leader>t', ':terminal<CR>a')
 
 local M = {}
 
@@ -47,151 +48,6 @@ local git_commit = require("plugins.git.commit")
 local function _set_keymap(mode, lhs, rhs, opts)
   opts = opts or { noremap = true, silent = true }
   vim.keymap.set(mode, lhs, rhs, opts)
-end
-function M.main()
-  vim.g.mapleader = " "
-  -- 配置 Ctrl+S 保存
-  _set_keymap('n', '<C-s>', ':w<CR>')
-  _set_keymap('i', '<C-s>', '<Esc>:w<CR>a')
-
-  -- 取消高亮
-  _set_keymap("n", "<leader>h", ":nohl<CR>")
-
-  _set_keymap('n', '<F2>', function()
-    -- 使用快捷键手动切换 paste 模式
-    vim.o.paste = not vim.o.paste
-    if vim.o.paste then
-      vim.notify('粘贴模式已启用 (按 F2 关闭)', vim.log.levels.INFO, {
-        title = '粘贴模式',
-        timeout = 2000
-      })
-    else
-      vim.notify('粘贴模式已禁用', vim.log.levels.INFO, {
-        title = '粘贴模式',
-        timeout = 1500
-      })
-    end
-  end, { desc = '切换粘贴模式' })
-  -- 可选：设置快捷键
-  -- vim.keymap.set('n', '<leader>vp', ':Paste<CR>', { silent = true, desc = '启用粘贴模式' })
-end
-
-function M.ufo()
-  -- Using ufo provider need remap `zR` and `zM`. If Neovim is 0.6.1, remap yourself
-  _set_keymap('n', 'zR', function() require('ufo').openAllFolds() end)
-  _set_keymap('n', 'zM', function() require('ufo').closeAllFolds() end)
-end
-
-function M.mason()
-  -- 检测当前缓冲区是否有 ast-grep LSP 客户端（使用新 API）
-  local function has_ast_grep_client()
-    local clients = vim.lsp.get_clients({ bufnr = 0 })
-    for _, client in ipairs(clients) do
-      if client.name == 'ast_grep' then
-        return true
-      end
-    end
-    return false
-  end
-
-  local use_ast_grep = has_ast_grep_client()
-
-  -- lsp 快捷键设置
-  -- 显示悬停文档
-  _set_keymap('n', 'K', vim.lsp.buf.hover)
-
-  -- 查找引用
-  _set_keymap('n', 'gr', vim.lsp.buf.references)
-
-  -- 重命名符号
-  _set_keymap('n', '<leader>rn', vim.lsp.buf.rename)
-
-  -- 代码操作
-  _set_keymap("n", "<leader>ca", vim.lsp.buf.code_action)
-
-  -- 查看工作区文件夹
-  _set_keymap('n', '<leader>wl', function()
-    print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
-  end)
-
-  -- 查看定义 go to definition
-  _set_keymap('n', 'gd', function()
-    local params = vim.lsp.util.make_position_params(nil, 'utf-16')
-    vim.lsp.buf_request(0, 'textDocument/definition', params, function(err, result)
-      if not result then return end
-      vim.lsp.util.jump_to_location(result[1], 'utf-16')
-    end)
-  end, { desc = "跳转定义" })
-
-  -- 文档显示 show hover
-  _set_keymap("n", "gh", vim.lsp.buf.hover)
-  _set_keymap("n", "g[", vim.diagnostic.goto_prev)
-  _set_keymap("n", "g]", vim.diagnostic.goto_next)
-  _set_keymap('n', 'go', vim.diagnostic.open_float)
-  _set_keymap('n', '<leader>q', vim.diagnostic.setloclist)
-
-  -- 如果 ast-grep 可用，可以添加特定功能或通知
-  if use_ast_grep then
-    -- 可以在这里添加 ast-grep 特有的功能
-    vim.defer_fn(function()
-      vim.notify("ast-grep LSP 已加载", vim.log.levels.INFO)
-    end, 100)
-  end
-
-  -- LSP格式化快捷键
-  _set_keymap('n', '<leader>lf', function()
-    vim.lsp.buf.format({
-      async = false,
-      filter = function(client)
-        return client.supports_method("textDocument/formatting")
-      end
-    })
-    vim.notify("已使用LSP格式化", vim.log.levels.INFO, {
-      title = "格式化",
-      timeout = 2000,
-    })
-  end, { desc = "使用LSP格式化当前缓冲区" })
-end
-
-function M.nvim_tree()
-  -- nvim-tree
-  _set_keymap("n", "<leader>d", ":NvimTreeToggle<CR>")
-end
-
-function M.comment()
-  -- 快捷注释
-  _set_keymap('n', '<leader>l', ':CommentToggle<CR>')
-  _set_keymap('x', '<leader>l', ':CommentToggle<CR>')
-end
-
-function M.terminal()
-  -- terminal
-  _set_keymap('n', '<leader>t', ':ToggleTerm direction=float<CR>')
-  _set_keymap('i', '<C-t>', '<Esc>:w!<CR>:ToggleTerm direction=float<CR>')
-end
-
-function M.code_runner()
-  -- code_runner
-  _set_keymap('n', '<leader>r', ':RunCode<CR>a', { noremap = true, silent = false })
-  _set_keymap('n', '<leader>rc', ':RunClose<CR>', { noremap = true, silent = false })
-end
-
-function M.translate()
-  -- 翻译
-  -- Ti, 支持在底部输入框输入翻译。
-  _set_keymap('n', 'ti', ':<C-u>Ti<CR>')
-
-  -- Ty, 从粘贴板中获取文字进行翻译(匿名寄存器中"").
-  _set_keymap('n', 'ty', ':<C-u>Ty<CR>')
-
-  -- Tc, 支持翻译光标处单词。
-  _set_keymap('n', 'tc', ':<C-u>Tc<CR>')
-
-  -- Tv, 支持在visual模式下选中翻译。
-  _set_keymap('v', 'tv', ':<C-u>Tv<CR>')
-
-  -- Tr, 支持在visual模式下将文字替换成翻译。
-  _set_keymap('v', 'tr', ':<C-u>Tr<CR>')
 end
 
 function M.codecompanion()
@@ -417,33 +273,6 @@ function M.codecompanion()
   end
 
   return keymap
-end
-
-function M.treesitter_textobjects()
-  -- nvim-treesitter textobjects 快捷键配置
-  -- 这些快捷键已经在 nvim-treesitter.lua 中配置了 textobjects
-  -- 这里只需要设置相关的快捷键
-
-  -- 由于 textobjects 的快捷键已经在插件配置中定义（如 ]f, [f 等）
-  -- 这里不需要额外设置，这个函数作为插件初始化使用
-
-  -- 可以在这里添加一些与 treesitter textobjects 相关的额外快捷键
-  -- 例如：
-  -- _set_keymap('n', '<leader>ts', ':TSHighlightCapturesUnderCursor<CR>')
-
-  -- 注意：这个函数被 nvim-treesitter.lua 的 init 选项调用
-  -- 所以它应该执行实际的快捷键设置，而不是返回一个函数
-
-  -- 添加 treesitter textobjects 相关的快捷键说明
-  -- 以下快捷键由 nvim-treesitter textobjects 插件提供：
-  -- [f: 跳转到上一个函数开头
-  -- ]f: 跳转到下一个函数开头
-  -- [m: 跳转到上一个类开头
-  -- ]m: 跳转到下一个类开头
-
-  -- 可以在这里添加额外的 textobjects 相关快捷键
-  -- 例如，添加一个快捷键来显示当前光标下的 textobject 信息
-  _set_keymap('n', '<leader>to', ':TSHighlightCapturesUnderCursor<CR>', { desc = "显示当前光标下的 treesitter 捕获信息" })
 end
 
 return M

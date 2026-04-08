@@ -182,6 +182,12 @@ local function setup_global_keymaps()
   vim.keymap.set('n', 'gt', vim.lsp.buf.type_definition, { desc = '跳转到类型定义' })
   -- 签名帮助
   vim.keymap.set('i', '<C-k>', vim.lsp.buf.signature_help, { desc = '签名帮助' })
+  vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action)
+  vim.keymap.set("n", "gh", vim.lsp.buf.hover)
+  vim.keymap.set("n", "g[", vim.diagnostic.goto_prev)
+  vim.keymap.set("n", "g]", vim.diagnostic.goto_next)
+  vim.keymap.set('n', 'go', vim.diagnostic.open_float)
+  vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist)
 end
 
 local function setup_diagnostics()
@@ -298,7 +304,11 @@ function M.setup()
         -- 使用 pcall 避免格式化失败导致保存失败
         local success = pcall(vim.lsp.buf.format, {
           async = false,
-          bufnr = bufnr
+          bufnr = bufnr,
+          -- 优先使用 none-ls 的格式化
+          filter = function(client)
+            return client.name == "null-ls" or client.supports_method("textDocument/formatting")
+          end
         })
 
         if not success then
@@ -311,7 +321,7 @@ function M.setup()
   -- 初始化 Mason
   M.setup_mason()
 
-  print("LSP 配置已加载")
+  vim.notify("LSP 配置已加载")
 end
 
 function M.setup_mason()
@@ -375,6 +385,7 @@ function M.ensure_lsp_servers()
 
   if #to_install > 0 then
     vim.notify("有 " .. #to_install .. " 个 LSP 服务器需要安装，运行 :LspInstallMissing 安装", vim.log.levels.INFO)
+    vim.cmd(':LspInstallMissing')
   else
     vim.notify("所有 LSP 服务器已安装 (" .. installed .. " 个)", vim.log.levels.INFO)
   end
