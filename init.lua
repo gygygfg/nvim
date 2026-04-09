@@ -23,7 +23,7 @@ _G.gh = function(x)
 end
 
 -- Wrap vim.pack.add to handle git HEAD errors
-local pack_specs = {
+vim.pack.add({
   -- 安装软件包而不加载
   -- 主题相关
   gh("folke/tokyonight.nvim"),
@@ -33,12 +33,12 @@ local pack_specs = {
   gh("akinsho/bufferline.nvim"),
   gh("folke/noice.nvim"),
   gh("rcarriga/nvim-notify"),
-  -- 文件浏览
-  gh("nvim-tree/nvim-tree.lua"),
-  -- 编辑增强
+    -- 编辑增强
   gh("nvim-treesitter/nvim-treesitter"),
   gh("windwp/nvim-autopairs"),
   gh("numToStr/Comment.nvim"),
+  -- 文件浏览
+  gh("nvim-tree/nvim-tree.lua"),
   -- 模糊搜索
   gh("nvim-telescope/telescope.nvim"),
   gh("nvim-lua/plenary.nvim"),
@@ -47,17 +47,8 @@ local pack_specs = {
   gh("github/copilot.vim"),
   -- 工具类
   gh("nvim-lua/popup.nvim"),
-}
+})
 
-local ok, err = pcall(vim.pack.add, pack_specs)
-if not ok then
-  vim.notify("vim.pack.add failed: " .. tostring(err), vim.log.levels.WARN)
-end
-
--- 加载必需的插件（确保在配置之前可用）
-vim.cmd.packadd("tokyonight.nvim")
-vim.cmd.packadd("nvim-treesitter")
-vim.cmd.packadd("nvim-web-devicons")
 -- 3. 加载核心配置
 
 -- 加载基础选项和按键映射

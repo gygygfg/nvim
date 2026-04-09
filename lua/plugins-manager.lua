@@ -32,7 +32,7 @@ function M.load_all_plugins()
 
   -- 方法1: 使用 vim.fn.glob
   local glob_pattern = plugins_dir .. "/*.lua"
-  vim.notify("查找模式: " .. glob_pattern, vim.log.levels.DEBUG)
+  -- vim.notify("查找模式: " .. glob_pattern, vim.log.levels.DEBUG)
 
   local files = vim.split(vim.fn.glob(glob_pattern), "\n")
   vim.notify("找到 " .. #files .. " 个 .lua 文件", vim.log.levels.DEBUG)
@@ -51,7 +51,9 @@ function M.load_all_plugins()
     if handle then
       while true do
         local name, type = vim.loop.fs_scandir_next(handle)
-        if not name then break end
+        if not name then
+          break
+        end
 
         if type == "file" and name:match("%.lua$") then
           local full_path = plugins_dir .. "/" .. name
@@ -73,7 +75,7 @@ function M.load_all_plugins()
     end
 
     local module_name = "plugins." .. filename:gsub("%.lua$", "")
-    vim.notify("尝试加载模块: " .. module_name, vim.log.levels.DEBUG)
+    -- vim.notify("尝试加载模块: " .. module_name, vim.log.levels.DEBUG)
 
     if load_module(module_name) then
       loaded_count = loaded_count + 1
@@ -86,11 +88,11 @@ function M.load_all_plugins()
 
   -- 2. 然后加载特殊目录中的 init.lua
   local special_dirs = { "git", "CodeCompanion" }
-  vim.notify("开始加载特殊目录模块...", vim.log.levels.DEBUG)
+  -- vim.notify("开始加载特殊目录模块...", vim.log.levels.DEBUG)
 
   for _, dir_name in ipairs(special_dirs) do
     local module_name = "plugins." .. dir_name
-    vim.notify("尝试加载目录模块: " .. module_name, vim.log.levels.DEBUG)
+    -- vim.notify("尝试加载目录模块: " .. module_name, vim.log.levels.DEBUG)
     if load_module(module_name) then
       loaded_count = loaded_count + 1
     else
@@ -98,7 +100,10 @@ function M.load_all_plugins()
     end
   end
 
-  vim.notify(string.format("✨ 插件加载完成! 成功: %d, 失败: %d", loaded_count, failed_count), vim.log.levels.INFO)
+  vim.notify(
+    string.format("✨ 插件加载完成! 成功: %d, 失败: %d", loaded_count, failed_count),
+    vim.log.levels.INFO
+  )
   return loaded_count, failed_count
 end
 
@@ -123,7 +128,7 @@ function M.list_available_plugins()
         table.insert(plugins, {
           name = module_name,
           type = "file",
-          path = file
+          path = file,
         })
         vim.notify("发现插件文件: " .. module_name, vim.log.levels.DEBUG)
       end
@@ -138,7 +143,7 @@ function M.list_available_plugins()
       table.insert(plugins, {
         name = "plugins." .. dir_name,
         type = "dir",
-        path = init_path
+        path = init_path,
       })
       vim.notify("发现插件目录: plugins." .. dir_name, vim.log.levels.DEBUG)
     end
@@ -181,7 +186,10 @@ function M.load_plugins_with_order(order_list)
     end
   end
 
-  vim.notify(string.format("🎯 顺序加载完成! 成功: %d, 失败: %d", loaded_count, failed_count), vim.log.levels.INFO)
+  vim.notify(
+    string.format("🎯 顺序加载完成! 成功: %d, 失败: %d", loaded_count, failed_count),
+    vim.log.levels.INFO
+  )
   return loaded_count, failed_count
 end
 
@@ -206,16 +214,16 @@ end
 
 M.suggested_order = {
   -- 默认执行顺序（根据您的目录结构建议）
-  "editor",       -- 基础编辑器配置
-  "theme",        -- 主题
-  "lualine",      -- 状态栏
-  "bufferline",   -- 缓冲区标签
-  "nvim_tree",    -- 文件树
-  "telescope",    -- 文件查找
-  "cmp",          -- 补全
-  "treesitter",   -- 语法高亮
-  "git",          -- Git集成
-  "CodeCompanion" -- AI助手
+  "editor", -- 基础编辑器配置
+  "theme", -- 主题
+  "lualine", -- 状态栏
+  "bufferline", -- 缓冲区标签
+  "nvim_tree", -- 文件树
+  "telescope", -- 文件查找
+  "cmp", -- 补全
+  "treesitter", -- 语法高亮
+  "git", -- Git集成
+  "CodeCompanion", -- AI助手
 }
 
 -- 自动初始化：当此模块被 require 时，可以选择是否自动加载
