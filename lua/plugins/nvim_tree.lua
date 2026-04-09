@@ -5,11 +5,11 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufEnter" }, {
   -- 状态栏和缓冲区 - 启动后加载
   once = true,
   callback = function()
-    require('nvim-tree').setup({
-      sort_by = 'case_sensitive',
+    require("nvim-tree").setup({
+      sort_by = "case_sensitive",
       view = {
         width = 30,
-        side = 'left',
+        side = "left",
       },
       renderer = {
         group_empty = true,
@@ -21,24 +21,24 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufEnter" }, {
             git = true,
           },
           glyphs = {
-            default = '',
-            symlink = '',
+            default = "",
+            symlink = "",
             folder = {
-              default = '',
-              open = '',
-              empty = '',
-              empty_open = '',
-              symlink = '',
-              symlink_open = '',
+              default = "",
+              open = "",
+              empty = "",
+              empty_open = "",
+              symlink = "",
+              symlink_open = "",
             },
             git = {
-              unstaged = '',
-              staged = 'S',
-              unmerged = '',
-              renamed = '➜',
-              untracked = 'U',
-              deleted = '',
-              ignored = '◌',
+              unstaged = "",
+              staged = "S",
+              unmerged = "",
+              renamed = "➜",
+              untracked = "U",
+              deleted = "",
+              ignored = "◌",
             },
           },
         },
@@ -47,9 +47,9 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufEnter" }, {
         dotfiles = false,
       },
     })
-  end
+  end,
 })
 
-vim.keymap.set('n', '<leader>d', function()
-  require('nvim-tree.api').tree.toggle()
-end, { desc = '切换文件树' })
+vim.keymap.set("n", "<leader>d", function()
+  require("nvim-tree.api").tree.toggle()
+end, { desc = "切换文件树" })

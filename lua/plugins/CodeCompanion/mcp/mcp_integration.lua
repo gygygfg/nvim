@@ -26,19 +26,25 @@ if not success then
     if not success then
       -- 如果还是失败，创建简单的替代
       mcp_config = {
-        get_enabled_servers = function() return {} end,
-        get_server_config = function() return nil end,
-        discover_tools = function() return {} end,
+        get_enabled_servers = function()
+          return {}
+        end,
+        get_server_config = function()
+          return nil
+        end,
+        discover_tools = function()
+          return {}
+        end,
         get_dynamic_tool_info = function()
           return {
             discovery_method = "简化版本",
             auto_refresh = false,
             tool_count = 0,
-            last_update = os.time()
+            last_update = os.time(),
           }
-        end
+        end,
       }
-      print("警告: 无法加载 mcp 配置，使用简化版本")
+      vim.notify("警告: 无法加载 mcp 配置，使用简化版本")
     end
   end
 end
@@ -127,7 +133,10 @@ function M.test_mcp_server(server_name)
     M.test_mcphub()
   else
     vim.notify("❌ 未知的服务器名称: " .. server_name, vim.log.levels.ERROR)
-    vim.notify("💡 可用的服务器: context7, web-scout, github, neovim, chrome-devtools, mcphub", vim.log.levels.INFO)
+    vim.notify(
+      "💡 可用的服务器: context7, web-scout, github, neovim, chrome-devtools, mcphub",
+      vim.log.levels.INFO
+    )
   end
 
   return true
@@ -245,14 +254,14 @@ function M.get_dynamic_tool_groups_info()
   for server_name, tools in pairs(servers) do
     groups[server_name] = {
       description = server_name .. " 服务器工具组",
-      tools = tools
+      tools = tools,
     }
   end
 
   -- 添加通用 MCP 组
   groups["mcp"] = {
     description = "所有 MCP 服务器的完整套件",
-    tools = { "所有动态发现的 MCP 工具" }
+    tools = { "所有动态发现的 MCP 工具" },
   }
 
   return groups
@@ -379,28 +388,28 @@ function M.create_commands()
     nargs = "?",
     complete = function()
       return { "silent", "quiet" }
-    end
+    end,
   })
 
   -- MCP 测试命令
   vim.api.nvim_create_user_command("TestMCP", function()
     M.test_all_mcp_servers()
   end, {
-    desc = "测试所有 MCP 服务"
+    desc = "测试所有 MCP 服务",
   })
 
   -- MCP 帮助命令
   vim.api.nvim_create_user_command("MCPHelp", function()
     M.show_mcp_usage_help()
   end, {
-    desc = "显示 MCP 服务使用帮助"
+    desc = "显示 MCP 服务使用帮助",
   })
 
   -- MCP 工具发现命令
   vim.api.nvim_create_user_command("DiscoverMCPTools", function()
     M.discover_mcp_tools()
   end, {
-    desc = "手动发现 MCP 工具"
+    desc = "手动发现 MCP 工具",
   })
 
   -- 单个服务器测试命令
