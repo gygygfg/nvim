@@ -1,15 +1,20 @@
--- lua/lsp/ftplugin/javascript.lua
--- JavaScript 文件类型触发 LSP 配置
-
--- 防止重复配置
-if vim.b.lsp_configured then
+-- JavaScript文件类型LSP配置
+if vim.b.lsp_config_loaded then
   return
 end
-vim.b.lsp_configured = true
 
--- 加载 tsserver 配置
-local config = require('lsp.configs.tsserver')
+-- 检查是否已安装tsserver
+local mason_ok, mason = pcall(require, "lsp.mason")
+if mason_ok and not mason.is_installed("tsserver") then
+  vim.notify("tsserver未安装，正在自动安装...", vim.log.levels.INFO)
+  mason.install_server("tsserver")
+end
 
--- 启用 tsserver 服务器并应用配置
-vim.lsp.config('tsserver', config)
-vim.lsp.enable('tsserver')
+-- 加载tsserver配置并启动
+local config_ok, config = pcall(require, "lsp.configs.tsserver")
+if config_ok then
+  vim.lsp.enable("tsserver", config)
+else
+  -- 使用默认配置
+  vim.lsp.enable("tsserver", {})
+end

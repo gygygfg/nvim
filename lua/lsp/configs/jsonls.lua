@@ -1,0 +1,19 @@
+-- JSON语言服务器配置
+return {
+  settings = {
+    json = {
+      validate = {
+        enable = true,
+      },
+      format = {
+        enable = true,
+      },
+      schemas = {
+        {
+          fileMatch = { 'package.json', '*.json' },
+        },
+      },
+    },
+  },
+  root_dir = vim.fs.dirname(vim.fs.find({ 'package.json', '.git' }, { upward = true })[1]),
+}
