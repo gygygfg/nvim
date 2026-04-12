@@ -4,6 +4,7 @@
 local M = {}
 
 vim.pack.add({
+  -- 安装但不加载需要插件
   -- LSP 相关
   gh("j-hui/fidget.nvim"),
   gh("stevearc/dressing.nvim"),
@@ -17,8 +18,8 @@ vim.pack.add({
   gh("stevearc/conform.nvim"),
 })
 
--- 格式化工具配置
 M.formatters_by_ft = {
+  -- 格式化工具配置
   lua = { "stylua" },
   python = { "black", "isort" },
   javascript = { "prettierd", "prettier" },
@@ -43,8 +44,69 @@ M.formatters_by_ft = {
   ["*"] = { "codespell" }, -- 拼写检查
 }
 
--- 动态加载 LSP 服务器配置
+M.filetype_mappings = {
+  -- 文件类型到 LSP 服务器的映射（支持多个服务器）
+  -- Web 开发
+  javascript = { "tsserver", "html", "cssls" },
+  typescript = { "tsserver", "html", "cssls" },
+  javascriptreact = { "tsserver", "html", "cssls" },
+  typescriptreact = { "tsserver", "html", "cssls" },
+  html = { "html", "cssls", "tsserver" },
+  css = { "cssls" },
+  json = { "jsonls" },
+  yaml = { "yamlls" },
+  yml = { "yamlls" },
+
+  -- 系统编程
+  c = { "clangd", "html" },
+  cpp = { "clangd", "html" },
+  rust = { "rust_analyzer", "html" },
+  go = { "gopls", "html" },
+
+  -- 脚本语言
+  lua = { "lua_ls", "html" },
+  python = { "pyright", "html", "cssls", "tsserver" },
+  sh = { "bashls" },
+  zsh = { "bashls" },
+  bash = { "bashls" },
+}
+
+M.lsp_to_mason = {
+  -- LSP 服务器到 Mason 包名的映射
+  lua_ls = "lua-language-server",
+  pyright = "pyright",
+  tsserver = "typescript-language-server",
+  html = "html-lsp",
+  cssls = "css-lsp",
+  jsonls = "json-lsp",
+  yamlls = "yaml-language-server",
+  bashls = "bash-language-server",
+  clangd = "clangd",
+  gopls = "gopls",
+  rust_analyzer = "rust-analyzer",
+}
+
+M.formatter_to_mason = {
+  -- 格式化工具到 Mason 包名的映射
+  stylua = "stylua",
+  prettier = "prettier",
+  prettierd = "prettierd",
+  black = "black",
+  isort = "isort",
+  yamlfmt = "yamlfmt",
+  shfmt = "shfmt",
+  ["clang-format"] = "clang-format",
+  gofumpt = "gofumpt",
+  goimports = "gofmt",
+  rustfmt = "rustfmt",
+  ["google-java-format"] = "google-java-format",
+  ["sql-formatter"] = "sql-formatter",
+  latexindent = "latexindent",
+  codespell = "codespell",
+}
+
 local function load_server_config(server_name)
+  -- 动态加载 LSP 服务器配置
   local ok, config = pcall(require, "lsp.configs." .. server_name)
   if ok then
     return config
@@ -52,17 +114,19 @@ local function load_server_config(server_name)
   return {}
 end
 
--- 获取所有可用的 LSP 服务器（从 configs 文件夹动态获取）
 local function get_available_servers()
+  -- 获取所有可用的 LSP 服务器（从 configs 文件夹动态获取）
   local configs_dir = vim.fn.expand("~/.config/nvim/lua/lsp/configs")
   local servers = {}
-  
+
   local handle = vim.loop.fs_scandir(configs_dir)
   if handle then
     while true do
       local name, type = vim.loop.fs_scandir_next(handle)
-      if not name then break end
-      
+      if not name then
+        break
+      end
+
       -- 只处理 .lua 文件
       if type == "file" and name:match("%.lua$") then
         local server_name = name:gsub("%.lua$", "")
@@ -70,7 +134,7 @@ local function get_available_servers()
       end
     end
   end
-  
+
   return servers
 end
 
@@ -82,8 +146,25 @@ M.server_configs = setmetatable({}, {
 
 M.get_available_servers = get_available_servers
 
--- 设置 conform.nvim
+local function has_active_lsp_client(bufnr)
+  -- 检查当前缓冲区是否有活动的 LSP 客户端
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+  local clients = vim.lsp.get_clients({ bufnr = bufnr })
+  return #clients > 0
+end
+
+local function safe_lsp_action(action, warning_msg)
+  -- 安全执行 LSP 操作，如果没有活动客户端则显示警告
+  local bufnr = vim.api.nvim_get_current_buf()
+  if has_active_lsp_client(bufnr) then
+    action()
+  else
+    vim.notify(warning_msg or "没有活动的 LSP 客户端", vim.log.levels.WARN)
+  end
+end
+
 local function setup_conform()
+  -- 设置 conform.nvim
   local conform_ok, conform = pcall(require, "conform")
   if not conform_ok then
     vim.notify("conform.nvim 插件未加载，请确保已安装", vim.log.levels.WARN)
@@ -166,47 +247,19 @@ end
 local function setup_global_keymaps()
   -- 设置全局按键映射
   vim.keymap.set("n", "gK", function()
-    -- 悬停文档
-    local bufnr = vim.api.nvim_get_current_buf()
-    local clients = vim.lsp.get_clients({ bufnr = bufnr })
-    if #clients > 0 then
-      vim.lsp.buf.hover()
-    else
-      vim.notify("没有活动的 LSP 客户端", vim.log.levels.WARN)
-    end
+    safe_lsp_action(vim.lsp.buf.hover, "没有活动的 LSP 客户端")
   end, { desc = "显示悬停文档" })
 
   vim.keymap.set("n", "gd", function()
-    -- 跳转到定义
-    local bufnr = vim.api.nvim_get_current_buf()
-    local clients = vim.lsp.get_clients({ bufnr = bufnr })
-    if #clients > 0 then
-      vim.lsp.buf.definition()
-    else
-      vim.notify("没有活动的 LSP 客户端", vim.log.levels.WARN)
-    end
+    safe_lsp_action(vim.lsp.buf.definition, "没有活动的 LSP 客户端")
   end, { desc = "跳转到定义" })
 
   vim.keymap.set({ "n", "v" }, "<leader>ca", function()
-    -- 代码操作
-    local bufnr = vim.api.nvim_get_current_buf()
-    local clients = vim.lsp.get_clients({ bufnr = bufnr })
-    if #clients > 0 then
-      vim.lsp.buf.code_action()
-    else
-      vim.notify("没有活动的 LSP 客户端", vim.log.levels.WARN)
-    end
+    safe_lsp_action(vim.lsp.buf.code_action, "没有活动的 LSP 客户端")
   end, { desc = "代码操作" })
 
   vim.keymap.set("n", "<leader>rn", function()
-    -- 重命名
-    local bufnr = vim.api.nvim_get_current_buf()
-    local clients = vim.lsp.get_clients({ bufnr = bufnr })
-    if #clients > 0 then
-      vim.lsp.buf.rename()
-    else
-      vim.notify("没有活动的 LSP 客户端", vim.log.levels.WARN)
-    end
+    safe_lsp_action(vim.lsp.buf.rename, "没有活动的 LSP 客户端")
   end, { desc = "重命名符号" })
 
   vim.keymap.set({ "n", "v" }, "<leader>cf", function()
@@ -291,33 +344,7 @@ local function start_lsp_for_filetype(ft, bufnr)
     return
   end
 
-  local filetype_mappings = {
-    -- 文件类型到 LSP 服务器的映射（支持多个服务器）
-    javascript = { "tsserver", "html", "cssls" },
-    typescript = { "tsserver", "html", "cssls" },
-    javascriptreact = { "tsserver", "html", "cssls" },
-    typescriptreact = { "tsserver", "html", "cssls" },
-    html = { "html", "cssls", "tsserver" },
-    css = { "cssls" },
-    json = { "jsonls" },
-    yaml = { "yamlls" },
-    yml = { "yamlls" },
-
-    -- 系统编程
-    c = { "clangd", "html" },
-    cpp = { "clangd", "html" },
-    rust = { "rust_analyzer", "html" },
-    go = { "gopls", "html" },
-
-    -- 脚本语言
-    lua = { "lua_ls", "html" },
-    python = { "pyright", "html", "cssls", "tsserver" },
-    sh = { "bashls" },
-    zsh = { "bashls" },
-    bash = { "bashls" },
-  }
-
-  local server_names = filetype_mappings[ft]
+  local server_names = M.filetype_mappings[ft]
   if not server_names then
     return
   end
@@ -467,25 +494,10 @@ function M.ensure_lsp_servers()
     return
   end
 
-  -- Mason 包名映射
-  local lsp_to_mason = {
-    lua_ls = "lua-language-server",
-    pyright = "pyright",
-    tsserver = "typescript-language-server",
-    html = "html-lsp",
-    cssls = "css-lsp",
-    jsonls = "json-lsp",
-    yamlls = "yaml-language-server",
-    bashls = "bash-language-server",
-    clangd = "clangd",
-    gopls = "gopls",
-    rust_analyzer = "rust-analyzer",
-  }
-
   local installed = 0
   local to_install = {}
 
-  for lsp_name, mason_name in pairs(lsp_to_mason) do
+  for lsp_name, mason_name in pairs(M.lsp_to_mason) do
     local ok, pkg = pcall(mason_registry.get_package, mason_name)
     if ok and pkg:is_installed() then
       installed = installed + 1
@@ -512,48 +524,21 @@ function M.ensure_formatters()
     return
   end
 
-  -- 格式化器映射表
-  local formatter_to_mason = {
-    stylua = "stylua",
-    prettier = "prettier",
-    prettierd = "prettierd",
-    black = "black",
-    isort = "isort",
-    yamlfmt = "yamlfmt",
-    shfmt = "shfmt",
-    ["clang-format"] = "clang-format",
-    gofumpt = "gofumpt",
-    goimports = "gofmt", -- gofmt 包含 goimports
-    rustfmt = "rustfmt",
-    ["google-java-format"] = "google-java-format",
-    ["sql-formatter"] = "sql-formatter",
-    latexindent = "latexindent",
-    codespell = "codespell",
-  }
-
   local installed = 0
   local to_install = {}
+  local added = {} -- 用于避免重复添加
 
   -- 收集需要安装的格式化工具
   for _, formatters in pairs(M.formatters_by_ft) do
     for _, formatter in ipairs(formatters) do
-      local mason_name = formatter_to_mason[formatter]
-      if mason_name then
+      local mason_name = M.formatter_to_mason[formatter]
+      if mason_name and not added[mason_name] then
         local ok, pkg = pcall(mason_registry.get_package, mason_name)
         if ok and pkg:is_installed() then
           installed = installed + 1
         elseif ok then
-          -- 避免重复添加
-          local already_in_list = false
-          for _, item in ipairs(to_install) do
-            if item[2] == mason_name then
-              already_in_list = true
-              break
-            end
-          end
-          if not already_in_list then
-            table.insert(to_install, { formatter, mason_name })
-          end
+          added[mason_name] = true
+          table.insert(to_install, { formatter, mason_name })
         end
       end
     end
@@ -571,29 +556,15 @@ function M.ensure_formatters()
 end
 
 vim.api.nvim_create_user_command("LspInstallMissing", function()
-  -- 创建命令
+  -- 安装缺失的 LSP 服务器
   local mason_registry_ok, mason_registry = pcall(require, "mason-registry")
   if not mason_registry_ok then
     vim.notify("无法访问 Mason 注册表", vim.log.levels.ERROR)
     return
   end
 
-  local lsp_to_mason = {
-    lua_ls = "lua-language-server",
-    pyright = "pyright",
-    tsserver = "typescript-language-server",
-    html = "html-lsp",
-    cssls = "css-lsp",
-    jsonls = "json-lsp",
-    yamlls = "yaml-language-server",
-    bashls = "bash-language-server",
-    clangd = "clangd",
-    gopls = "gopls",
-    rust_analyzer = "rust-analyzer",
-  }
-
   local installed = 0
-  for lsp_name, mason_name in pairs(lsp_to_mason) do
+  for lsp_name, mason_name in pairs(M.lsp_to_mason) do
     local ok, pkg = pcall(mason_registry.get_package, mason_name)
     if ok and not pkg:is_installed() then
       pkg:install()
@@ -617,26 +588,8 @@ vim.api.nvim_create_user_command("FormatterInstallMissing", function()
     return
   end
 
-  local formatter_to_mason = {
-    stylua = "stylua",
-    prettier = "prettier",
-    prettierd = "prettierd",
-    black = "black",
-    isort = "isort",
-    yamlfmt = "yamlfmt",
-    shfmt = "shfmt",
-    ["clang-format"] = "clang-format",
-    gofumpt = "gofumpt",
-    goimports = "gofmt",
-    rustfmt = "rustfmt",
-    ["google-java-format"] = "google-java-format",
-    ["sql-formatter"] = "sql-formatter",
-    latexindent = "latexindent",
-    codespell = "codespell",
-  }
-
   local installed = 0
-  for formatter, mason_name in pairs(formatter_to_mason) do
+  for formatter, mason_name in pairs(M.formatter_to_mason) do
     local ok, pkg = pcall(mason_registry.get_package, mason_name)
     if ok and not pkg:is_installed() then
       pkg:install()
@@ -669,34 +622,7 @@ vim.api.nvim_create_user_command("LspStatus", function()
 
   print("文件类型: " .. vim.bo.filetype)
 
-  -- 文件类型到 LSP 服务器的映射（支持多个服务器）
-  local filetype_mappings = {
-    -- Web 开发
-    javascript = { "tsserver", "html", "cssls" },
-    typescript = { "tsserver", "html", "cssls" },
-    javascriptreact = { "tsserver", "html", "cssls" },
-    typescriptreact = { "tsserver", "html", "cssls" },
-    html = { "html", "cssls", "tsserver" },
-    css = { "cssls" },
-    json = { "jsonls" },
-    yaml = { "yamlls" },
-    yml = { "yamlls" },
-
-    -- 系统编程
-    c = { "clangd", "html" },
-    cpp = { "clangd", "html" },
-    rust = { "rust_analyzer", "html" },
-    go = { "gopls", "html" },
-
-    -- 脚本语言
-    lua = { "lua_ls", "html" },
-    python = { "pyright", "html", "cssls", "tsserver" },
-    sh = { "bashls" },
-    zsh = { "bashls" },
-    bash = { "bashls" },
-  }
-
-  local servers = filetype_mappings[vim.bo.filetype]
+  local servers = M.filetype_mappings[vim.bo.filetype]
   if servers then
     print("配置的 LSP 服务器: " .. table.concat(servers, ", "))
   end
@@ -709,7 +635,7 @@ vim.api.nvim_create_user_command("LspStatus", function()
   end
 
   -- 显示格式化器信息
-  local conform_ok, conform = pcall(require, "conform")
+  local conform_ok, _ = pcall(require, "conform")
   if conform_ok then
     local ft = vim.bo.filetype
     local formatters = M.formatters_by_ft[ft] or {}
