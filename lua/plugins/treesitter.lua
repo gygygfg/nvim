@@ -3,28 +3,24 @@
 
 vim.pack.add({
     -- 安装 plenary.nvim (nvim-treesitter 的依赖)
-    gh("nvim-lua/plenary.nvim"),{
+    gh("nvim-lua/plenary.nvim"),
     -- 安装 nvim-treesitter
-    -- gh("nvim-treesitter/nvim-treesitter"),
-    src = "https://github.com/nvim-treesitter/nvim-treesitter",
-    run = ":TSUpdate",
-    -- after = { "nvim-lua/plenary.nvim" },
-  },{
+    {
+        src = "https://github.com/nvim-treesitter/nvim-treesitter",
+        run = ":TSUpdate",
+    },
     -- 安装 nvim-treesitter-textobjects (可选扩展)
-    -- gh("nvim-treesitter/nvim-treesitter-textobjects"),
-    src = "https://github.com/nvim-treesitter/nvim-treesitter-textobjects",
-    -- after = { "nvim-treesitter/nvim-treesitter" },
-  },{
+    {
+        src = "https://github.com/nvim-treesitter/nvim-treesitter-textobjects",
+    },
     -- 安装 rainbow-delimiters.nvim (nvim-ts-rainbow2 的现代替代品)
-    -- gh("HiPhish/rainbow-delimiters.nvim"),
-    src = "https://github.com/HiPhish/rainbow-delimiters.nvim",
-    -- after = { "nvim-treesitter/nvim-treesitter" },
-  },{
+    {
+        src = "https://github.com/HiPhish/rainbow-delimiters.nvim",
+    },
     -- 安装 nvim-ts-context-commentstring (可选扩展)
-    -- gh("JoosepAlviste/nvim-ts-context-commentstring"),
-    src = "https://github.com/JoosepAlviste/nvim-ts-context-commentstring",
-    -- after = { "nvim-treesitter/nvim-treesitter" },
-  },
+    {
+        src = "https://github.com/JoosepAlviste/nvim-ts-context-commentstring",
+    },
 })
 
 local function setup()

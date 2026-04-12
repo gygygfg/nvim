@@ -17,7 +17,8 @@ local function wrapped_notify(msg, level, opts)
   -- 记录消息到历史
   if type(msg) == 'string' and msg ~= '' then
     local timestamp = os.date('%H:%M:%S')
-    local level_name = ({ 'TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR' })[level or 3] or 'INFO'
+    local level_names = { [0] = 'TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR' }
+    local level_name = level_names[level] or 'INFO'
 
     table.insert(message_history, {
       msg = msg,
@@ -74,7 +75,8 @@ vim.api.nvim_create_autocmd('VimEnter', {
       vim.notify = function(msg, level, opts)
         if type(msg) == 'string' and msg ~= '' then
           local timestamp = os.date('%H:%M:%S')
-          local level_name = ({ 'TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR' })[level or 3] or 'INFO'
+          local level_names = { [0] = 'TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR' }
+          local level_name = level_names[level] or 'INFO'
 
           table.insert(message_history, {
             msg = msg,
@@ -130,7 +132,8 @@ M.show_history = function()
   table.insert(lines, "")
 
   for i, item in ipairs(message_history) do
-    local level_name = ({ 'TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR' })[item.level] or 'INFO'
+    local level_names = { [0] = 'TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR' }
+    local level_name = level_names[item.level] or 'INFO'
     local prefix = string.format("%3d. [%s] [%s]", i, item.time, level_name)
 
     -- 处理多行消息
