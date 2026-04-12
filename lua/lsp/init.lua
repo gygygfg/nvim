@@ -17,32 +17,6 @@ vim.pack.add({
   gh("stevearc/conform.nvim"),
 })
 
-M.filetype_to_lsp = {
-  -- 文件类型到 LSP 服务器的映射
-  lua = "lua_ls",
-  python = "pyright",
-  javascript = "tsserver",
-  typescript = "tsserver",
-  javascriptreact = "tsserver",
-  typescriptreact = "tsserver",
-  html = "html",
-  css = "cssls",
-  json = "jsonls",
-  yaml = "yamlls",
-  yml = "yamlls",
-  bash = "bashls",
-  sh = "bashls",
-  c = "clangd",
-  cpp = "clangd",
-  go = "gopls",
-  rust = "rust_analyzer",
-  java = "jdtls",
-  markdown = "marksman",
-  dockerfile = "dockerls",
-  sql = "sqlls",
-  tex = "texlab",
-}
-
 -- 格式化工具配置
 M.formatters_by_ft = {
   lua = { "stylua" },
@@ -69,83 +43,44 @@ M.formatters_by_ft = {
   ["*"] = { "codespell" }, -- 拼写检查
 }
 
-M.server_configs = {
-  -- LSP 服务器配置
-  lua_ls = {
-    settings = {
-      Lua = {
-        runtime = { version = "LuaJIT" },
-        diagnostics = {
-          globals = { "vim" },
-          disable = { "different-requires" },
-        },
-        workspace = {
-          library = vim.api.nvim_get_runtime_file("", true),
-          checkThirdParty = false,
-        },
-        telemetry = { enable = false },
-      },
-    },
-    single_file_support = true,
-  },
+-- 动态加载 LSP 服务器配置
+local function load_server_config(server_name)
+  local ok, config = pcall(require, "lsp.configs." .. server_name)
+  if ok then
+    return config
+  end
+  return {}
+end
 
-  pyright = {
-    settings = {
-      python = {
-        analysis = {
-          typeCheckingMode = "basic",
-          autoSearchPaths = true,
-          useLibraryCodeForTypes = true,
-        },
-      },
-    },
-    single_file_support = true,
-  },
+-- 获取所有可用的 LSP 服务器（从 configs 文件夹动态获取）
+local function get_available_servers()
+  local configs_dir = vim.fn.expand("~/.config/nvim/lua/lsp/configs")
+  local servers = {}
+  
+  local handle = vim.loop.fs_scandir(configs_dir)
+  if handle then
+    while true do
+      local name, type = vim.loop.fs_scandir_next(handle)
+      if not name then break end
+      
+      -- 只处理 .lua 文件
+      if type == "file" and name:match("%.lua$") then
+        local server_name = name:gsub("%.lua$", "")
+        table.insert(servers, server_name)
+      end
+    end
+  end
+  
+  return servers
+end
 
-  tsserver = {
-    settings = {
-      typescript = {
-        format = { enable = true },
-      },
-      javascript = {
-        format = { enable = true },
-      },
-    },
-    single_file_support = true,
-  },
+M.server_configs = setmetatable({}, {
+  __index = function(_, server_name)
+    return load_server_config(server_name)
+  end,
+})
 
-  html = {
-    single_file_support = true,
-  },
-
-  cssls = {
-    single_file_support = true,
-  },
-
-  jsonls = {
-    single_file_support = true,
-  },
-
-  yamlls = {
-    single_file_support = true,
-  },
-
-  bashls = {
-    single_file_support = true,
-  },
-
-  clangd = {
-    single_file_support = true,
-  },
-
-  gopls = {
-    single_file_support = true,
-  },
-
-  rust_analyzer = {
-    single_file_support = true,
-  },
-}
+M.get_available_servers = get_available_servers
 
 -- 设置 conform.nvim
 local function setup_conform()
@@ -356,20 +291,57 @@ local function start_lsp_for_filetype(ft, bufnr)
     return
   end
 
-  local server_name = M.filetype_to_lsp[ft]
-  if not server_name then
+  local filetype_mappings = {
+    -- 文件类型到 LSP 服务器的映射（支持多个服务器）
+    javascript = { "tsserver", "html", "cssls" },
+    typescript = { "tsserver", "html", "cssls" },
+    javascriptreact = { "tsserver", "html", "cssls" },
+    typescriptreact = { "tsserver", "html", "cssls" },
+    html = { "html", "cssls", "tsserver" },
+    css = { "cssls" },
+    json = { "jsonls" },
+    yaml = { "yamlls" },
+    yml = { "yamlls" },
+
+    -- 系统编程
+    c = { "clangd", "html" },
+    cpp = { "clangd", "html" },
+    rust = { "rust_analyzer", "html" },
+    go = { "gopls", "html" },
+
+    -- 脚本语言
+    lua = { "lua_ls", "html" },
+    python = { "pyright", "html", "cssls", "tsserver" },
+    sh = { "bashls" },
+    zsh = { "bashls" },
+    bash = { "bashls" },
+  }
+
+  local server_names = filetype_mappings[ft]
+  if not server_names then
     return
   end
 
-  local config = M.server_configs[server_name] or {}
+  -- 启动每个 LSP 服务器
+  for _, server_name in ipairs(server_names) do
+    local config = M.server_configs[server_name] or {}
 
-  -- 使用 pcall 安全地启动 LSP
-  local success, err = pcall(vim.lsp.enable, server_name, config)
-  if success then
-    vim.b[bufnr].lsp_started = true
-    vim.notify("LSP: " .. server_name .. " 已启用", vim.log.levels.INFO)
-  else
-    vim.notify("启动 LSP " .. server_name .. " 失败: " .. tostring(err), vim.log.levels.ERROR)
+    -- 使用 pcall 安全地启动 LSP
+    local success, err = pcall(vim.lsp.config, server_name, config)
+    if not success then
+      vim.notify("配置 LSP " .. server_name .. " 失败: " .. tostring(err), vim.log.levels.WARN)
+    end
+
+    success, err = pcall(vim.lsp.enable, server_name)
+    if success then
+      vim.b[bufnr].lsp_started = true
+    else
+      vim.notify("启动 LSP " .. server_name .. " 失败: " .. tostring(err), vim.log.levels.ERROR)
+    end
+  end
+
+  if vim.b[bufnr].lsp_started then
+    vim.notify("LSP: " .. table.concat(server_names, ", ") .. " 已启用", vim.log.levels.INFO)
   end
 end
 
@@ -384,10 +356,10 @@ function M.setup()
   -- 设置 conform.nvim
   setup_conform()
 
-  -- 文件类型自动命令
+  -- 使用 ftplugin autocmd 统一加载 LSP 配置
+  -- 这会替代所有单独的 ftplugin 文件
   vim.api.nvim_create_autocmd("FileType", {
     group = vim.api.nvim_create_augroup("LSPFileType", { clear = true }),
-    pattern = "*",
     callback = function(args)
       local ft = vim.bo.filetype
       if ft and ft ~= "" then
@@ -696,9 +668,44 @@ vim.api.nvim_create_user_command("LspStatus", function()
   end
 
   print("文件类型: " .. vim.bo.filetype)
-  local server_name = M.filetype_to_lsp[vim.bo.filetype]
-  if server_name then
-    print("配置的 LSP 服务器: " .. server_name)
+
+  -- 文件类型到 LSP 服务器的映射（支持多个服务器）
+  local filetype_mappings = {
+    -- Web 开发
+    javascript = { "tsserver", "html", "cssls" },
+    typescript = { "tsserver", "html", "cssls" },
+    javascriptreact = { "tsserver", "html", "cssls" },
+    typescriptreact = { "tsserver", "html", "cssls" },
+    html = { "html", "cssls", "tsserver" },
+    css = { "cssls" },
+    json = { "jsonls" },
+    yaml = { "yamlls" },
+    yml = { "yamlls" },
+
+    -- 系统编程
+    c = { "clangd", "html" },
+    cpp = { "clangd", "html" },
+    rust = { "rust_analyzer", "html" },
+    go = { "gopls", "html" },
+
+    -- 脚本语言
+    lua = { "lua_ls", "html" },
+    python = { "pyright", "html", "cssls", "tsserver" },
+    sh = { "bashls" },
+    zsh = { "bashls" },
+    bash = { "bashls" },
+  }
+
+  local servers = filetype_mappings[vim.bo.filetype]
+  if servers then
+    print("配置的 LSP 服务器: " .. table.concat(servers, ", "))
+  end
+
+  -- 显示所有可用的 LSP 服务器
+  local available_servers = M.get_available_servers()
+  if #available_servers > 0 then
+    table.sort(available_servers)
+    print("可用的 LSP 服务器: " .. table.concat(available_servers, ", "))
   end
 
   -- 显示格式化器信息
@@ -713,5 +720,22 @@ vim.api.nvim_create_user_command("LspStatus", function()
     end
   end
 end, { desc = "显示 LSP 状态" })
+
+vim.api.nvim_create_user_command("LspListServers", function()
+  -- 列出所有可用的 LSP 服务器
+  local servers = M.get_available_servers()
+  if #servers == 0 then
+    print("没有找到可用的 LSP 服务器配置")
+    return
+  end
+
+  table.sort(servers)
+  print("可用的 LSP 服务器配置 (" .. #servers .. " 个):")
+  for _, server in ipairs(servers) do
+    local config = M.server_configs[server]
+    local has_config = next(config) ~= nil
+    print(string.format("  - %-20s %s", server, has_config and "✓ 有配置" or "✗ 无配置"))
+  end
+end, { desc = "列出所有可用的 LSP 服务器" })
 
 return M
