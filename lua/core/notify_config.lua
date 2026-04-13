@@ -190,18 +190,18 @@ M.show_history = function()
   -- 添加退出快捷键
   local function close_window()
     if vim.api.nvim_win_is_valid(win) then
-      vim.api.nvim_win_close(win, true)
+      pcall(vim.api.nvim_win_close, win, true)
     end
     if vim.api.nvim_buf_is_valid(buf) then
-      vim.api.nvim_buf_delete(buf, { force = true })
+      pcall(vim.api.nvim_buf_delete, buf, { force = true })
     end
   end
 
-  vim.api.nvim_buf_set_keymap(buf, 'n', 'q', '<cmd>lua require("core.notify_config")._close_current_window()<CR>',
+  vim.api.nvim_buf_set_keymap(buf, 'n', 'q', '<cmd>lua local w=vim.api.nvim_get_current_win(); if vim.api.nvim_win_is_valid(w) then pcall(vim.api.nvim_win_close, w, true) end<CR>',
     { noremap = true, silent = true })
-  vim.api.nvim_buf_set_keymap(buf, 'n', '<ESC>', '<cmd>lua require("core.notify_config")._close_current_window()<CR>',
+  vim.api.nvim_buf_set_keymap(buf, 'n', '<ESC>', '<cmd>lua local w=vim.api.nvim_get_current_win(); if vim.api.nvim_win_is_valid(w) then pcall(vim.api.nvim_win_close, w, true) end<CR>',
     { noremap = true, silent = true })
-  vim.api.nvim_buf_set_keymap(buf, 'n', '<CR>', '<cmd>lua require("core.notify_config")._close_current_window()<CR>',
+  vim.api.nvim_buf_set_keymap(buf, 'n', '<CR>', '<cmd>lua local w=vim.api.nvim_get_current_win(); if vim.api.nvim_win_is_valid(w) then pcall(vim.api.nvim_win_close, w, true) end<CR>',
     { noremap = true, silent = true })
 
   -- 保存窗口和缓冲区引用
@@ -222,26 +222,49 @@ M.show_history = function()
   return win, buf
 end
 
--- 关闭当前窗口的函数
+-- 关闭当前窗口的函数（带安全保护）
 M._close_current_window = function()
-  if M._current_window and vim.api.nvim_win_is_valid(M._current_window) then
-    vim.api.nvim_win_close(M._current_window, true)
-  end
-  if M._current_buffer and vim.api.nvim_buf_is_valid(M._current_buffer) then
-    vim.api.nvim_buf_delete(M._current_buffer, { force = true })
-  end
-  M._current_window = nil
-  M._current_buffer = nil
+  -- 使用 vim.schedule 延迟执行，避免与其他窗口操作冲突
+  vim.schedule(function()
+    -- 安全关闭缓冲区
+    if M._current_buffer and vim.api.nvim_buf_is_valid(M._current_buffer) then
+      local ok_buf, err_buf = pcall(vim.api.nvim_buf_delete, M._current_buffer, { force = true })
+      if not ok_buf then
+        vim.schedule(function()
+          vim.notify("关闭缓冲区失败: " .. tostring(err_buf), vim.log.levels.WARN)
+        end)
+      end
+    end
+
+    -- 安全关闭窗口（先关闭缓冲区，再关闭窗口）
+    if M._current_window and vim.api.nvim_win_is_valid(M._current_window) then
+      local ok_win, err_win = pcall(vim.api.nvim_win_close, M._current_window, true)
+      if not ok_win then
+        vim.schedule(function()
+          vim.notify("关闭窗口失败: " .. tostring(err_win), vim.log.levels.WARN)
+        end)
+      end
+    end
+
+    -- 清理引用
+    M._current_window = nil
+    M._current_buffer = nil
+  end)
 end
 
 -- 创建用户命令
 vim.api.nvim_create_user_command('NotifiCations', function()
   -- 如果已有窗口打开，先关闭它
   if M._current_window and vim.api.nvim_win_is_valid(M._current_window) then
-    M._close_current_window()
-    vim.defer_fn(function()
-      M.show_history()
-    end, 50)
+    -- 使用 pcall 安全关闭
+    local ok = pcall(function()
+      M._close_current_window()
+    end)
+    if ok then
+      vim.defer_fn(function()
+        M.show_history()
+      end, 100) -- 增加延迟到 100ms，确保窗口完全关闭
+    end
   else
     M.show_history()
   end
