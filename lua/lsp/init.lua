@@ -482,6 +482,11 @@ function M.setup_mason()
 
   -- 安装推荐的 LSP 服务器和格式化工具
   vim.defer_fn(function()
+    -- 尝试获取包列表，如果获取不到就更新
+    local mason_registry_ok, mason_registry = pcall(require, "mason-registry")
+    if not mason_registry_ok or not mason_registry.get_package then
+      vim.cmd('MasonUpdate')
+    end
     M.ensure_lsp_servers()
     M.ensure_formatters()
   end, 1000)
