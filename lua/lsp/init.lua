@@ -10,13 +10,26 @@ vim.pack.add({
   gh("stevearc/dressing.nvim"),
   gh("folke/trouble.nvim"),
   gh("folke/which-key.nvim"),
-  gh("neovim/nvim-lspconfig"), -- 虽然0.12有内置lsp，但这个插件提供更好配置
+  -- gh("neovim/nvim-lspconfig"), -- 注释掉，完全使用 Neovim 0.12 内置 LSP API
   -- Mason 和相关插件
   gh("williamboman/mason.nvim"),
   gh("williamboman/mason-lspconfig.nvim"),
   -- Formatter & Linter
   gh("stevearc/conform.nvim"),
 })
+
+-- 配置选项
+M.config = {
+  -- 是否使用 nvim-lspconfig 插件
+  -- 设置为 false 时，使用 Neovim 0.12 的内置 LSP API
+  use_lspconfig = false,
+
+  -- 是否启用调试模式
+  debug = false,
+
+  -- 是否自动格式化
+  auto_format = true,
+}
 
 M.formatters_by_ft = {
   -- 格式化工具配置
@@ -119,11 +132,61 @@ M.skip_filetypes = {
 
 local function load_server_config(server_name)
   -- 动态加载 LSP 服务器配置
-  local ok, config = pcall(require, "lsp.configs." .. server_name)
+  local module_name = "lsp.configs." .. server_name
+
+  -- 调试信息
+  if vim.g.lsp_debug then
+    vim.notify("[LSP] 尝试加载配置模块: " .. module_name)
+  end
+
+  local ok, config = pcall(require, module_name)
   if ok then
     return config
+  else
+    vim.notify("[LSP] 配置加载失败: " .. server_name)
+    vim.notify("[LSP] 错误信息: " .. config)
+
+    -- 调试模块路径
+    vim.notify("[LSP] 调试模块路径:")
+
+    -- 详细分析 package.path
+    local paths = {}
+    for path in package.path:gmatch("[^;]+") do
+      table.insert(paths, path)
+    end
+    vim.notify("  package.path 包含 " .. #paths .. " 个路径")
+
+    -- 显示前几个路径
+    for i = 1, math.min(5, #paths) do
+      vim.notify("    [" .. i .. "] " .. paths[i])
+    end
+
+    if #paths > 5 then
+      vim.notify("    ... 还有 " .. (#paths - 5) .. " 个路径")
+    end
+
+    -- 尝试查找文件
+    local config_path = vim.fn.expand("~/.config/nvim/lua/lsp/configs/" .. server_name .. ".lua")
+    vim.notify("  配置文件路径: " .. config_path)
+    vim.notify("  文件存在: " .. (vim.fn.filereadable(config_path) == 1 and "是" or "否"))
+
+    -- 测试模块搜索
+    vim.notify("  测试模块搜索:")
+    local test_module = "lsp.configs." .. server_name
+    local test_path = test_module:gsub("%.", "/") .. ".lua"
+    vim.notify("    模块名: " .. test_module)
+    vim.notify("    转换后路径: " .. test_path)
+
+    -- 尝试在 package.path 中查找
+    for i, path_pattern in ipairs(paths) do
+      local test_file = path_pattern:gsub("%?", test_path)
+      if vim.fn.filereadable(test_file) == 1 then
+        vim.notify("    在路径 [" .. i .. "] 找到文件: " .. test_file)
+        break
+      end
+    end
+    return {}
   end
-  return {}
 end
 
 local function get_default_cmd(server_name)
@@ -441,15 +504,22 @@ local function start_lsp_for_filetype(ft, bufnr)
 
       if attached then
         table.insert(started_servers, server_name)
-      elseif vim.g.lsp_debug then
-        vim.notify(
-          "跳过 LSP " .. server_name .. ": 没有可用的客户端或文件类型不匹配",
-          vim.log.levels.WARN
-        )
+      else
+        -- 如果没有可用的客户端，尝试启动新的服务器
+        -- 使用我们的配置来启动
+        local success = M.start_server_with_config(server_name, bufnr)
+        if success then
+          table.insert(started_servers, server_name)
+          if vim.g.lsp_debug then
+            vim.notify("已启动 LSP 服务器: " .. server_name, vim.log.levels.INFO)
+          end
+        elseif vim.g.lsp_debug then
+          vim.notify(
+            "跳过 LSP " .. server_name .. ": 没有可用的客户端或文件类型不匹配",
+            vim.log.levels.WARN
+          )
+        end
       end
-
-      -- 注意：我们不在这里启动新的服务器，让 mason-lspconfig 处理服务器启动
-      -- 这样可以避免重复启动同一个服务器
     end
   end
 
@@ -565,7 +635,7 @@ function M.setup()
 end
 
 function M.cleanup_duplicate_clients()
-  -- 清理重复的 LSP 客户端
+  -- 清理重复的 LSP 客户端，优先保留使用我们配置的客户端
   local all_clients = vim.lsp.get_clients()
   local clients_by_name = {}
   local removed = 0
@@ -582,28 +652,79 @@ function M.cleanup_duplicate_clients()
   for name, client_list in pairs(clients_by_name) do
     if #client_list > 1 then
       if vim.g.lsp_debug then
-        print("发现重复的 LSP 客户端: " .. name .. " (" .. #client_list .. " 个实例)")
+        vim.notify("发现重复的 LSP 客户端: " .. name .. " (" .. #client_list .. " 个实例)")
       end
 
-      -- 保留第一个（通常是最早启动的），停止其他的
-      for i = 2, #client_list do
-        local client = client_list[i]
-        if vim.g.lsp_debug then
-          print("  停止实例 ID: " .. client.id)
+      -- 找出使用我们配置的客户端
+      local our_config_clients = {}
+      local default_config_clients = {}
+
+      for _, client in ipairs(client_list) do
+        -- 检查是否使用我们的配置（通过检查是否有我们的特定设置）
+        local is_our_config = false
+        if client.config and client.config.settings then
+          -- 检查是否有我们配置的特定字段
+          if name == "lua_ls" and client.config.settings.Lua then
+            -- 检查是否有我们配置的全局变量
+            if client.config.settings.Lua.diagnostics and client.config.settings.Lua.diagnostics.globals then
+              is_our_config = true
+            end
+          elseif client.config.settings then
+            -- 对于其他服务器，如果有 settings 就认为是我们的配置
+            is_our_config = true
+          end
         end
-        client.terminate()
-        removed = removed + 1
+
+        if is_our_config then
+          table.insert(our_config_clients, client)
+        else
+          table.insert(default_config_clients, client)
+        end
+      end
+
+      -- 优先保留使用我们配置的客户端
+      local clients_to_keep = {}
+      if #our_config_clients > 0 then
+        if vim.g.lsp_debug then
+          vim.notify("  保留使用我们配置的客户端 (" .. #our_config_clients .. " 个)")
+        end
+        clients_to_keep = our_config_clients
+      else
+        if vim.g.lsp_debug then
+          vim.notify("  没有找到使用我们配置的客户端，保留第一个默认配置客户端")
+        end
+        -- 保留第一个默认配置客户端
+        table.insert(clients_to_keep, default_config_clients[1])
+      end
+
+      -- 停止不需要的客户端
+      for _, client in ipairs(client_list) do
+        local should_keep = false
+        for _, keep_client in ipairs(clients_to_keep) do
+          if client.id == keep_client.id then
+            should_keep = true
+            break
+          end
+        end
+
+        if not should_keep then
+          if vim.g.lsp_debug then
+            vim.notify("  停止实例 ID: " .. client.id)
+          end
+          client:stop()
+          removed = removed + 1
+        end
       end
     end
   end
 
   if removed > 0 then
     if vim.g.lsp_debug then
-      print("已停止 " .. removed .. " 个重复的 LSP 客户端实例")
+      vim.notify("已停止 " .. removed .. " 个重复的 LSP 客户端实例")
     end
     vim.notify("已清理 " .. removed .. " 个重复的 LSP 客户端", vim.log.levels.INFO)
   elseif vim.g.lsp_debug then
-    print("未发现重复的 LSP 客户端")
+    vim.notify("未发现重复的 LSP 客户端")
   end
 end
 
@@ -631,7 +752,24 @@ function M.setup_mason()
   if mason_lspconfig_ok then
     -- 定义处理器函数
     local function setup_server(server_name)
+      -- 调试信息
+      if vim.g.lsp_debug then
+        vim.notify("[LSP] ========================================")
+        vim.notify("[LSP] 开始配置服务器: " .. server_name)
+        vim.notify("[LSP] ========================================")
+      end
+
       local config = M.server_configs[server_name] or {}
+
+      -- 调试信息：显示加载的配置
+      if vim.g.lsp_debug then
+        vim.notify("[LSP] 为服务器 " .. server_name .. " 加载配置:")
+        vim.notify("  配置文件存在: " .. (next(config) ~= nil and "是" or "否"))
+        if next(config) ~= nil then
+          vim.notify("  设置字段: " .. (config.settings and "有" or "无"))
+          vim.notify("  文件类型: " .. (config.filetypes and table.concat(config.filetypes, ", ") or "无"))
+        end
+      end
 
       -- 确保配置包含必要的字段
       local cmd = config.cmd or get_default_cmd(server_name)
@@ -664,7 +802,7 @@ function M.setup_mason()
           vim.keymap.set("n", "<leader>wa", vim.lsp.buf.add_workspace_folder, bufopts)
           vim.keymap.set("n", "<leader>wr", vim.lsp.buf.remove_workspace_folder, bufopts)
           vim.keymap.set("n", "<leader>wl", function()
-            print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
+            vim.notify(vim.inspect(vim.lsp.buf.list_workspace_folders()))
           end, bufopts)
           vim.keymap.set("n", "<leader>D", vim.lsp.buf.type_definition, bufopts)
           vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, bufopts)
@@ -680,24 +818,103 @@ function M.setup_mason()
         manual = true, -- 手动启动，避免自动启动
       }
 
-      -- 使用 nvim-lspconfig 配置服务器
-      local lspconfig_ok, lspconfig = pcall(require, "lspconfig")
-      if lspconfig_ok then
-        lspconfig[server_name].setup(lsp_config)
-        if vim.g.lsp_debug then
-          vim.notify("已配置 LSP 服务器: " .. server_name, vim.log.levels.INFO)
+      -- 调试信息：显示最终配置
+      if vim.g.lsp_debug then
+        vim.notify("[LSP] 最终配置 " .. server_name .. ":")
+        vim.notify("  cmd: " .. vim.inspect(cmd))
+        vim.notify("  设置字段数量: " .. (lsp_config.settings and #vim.tbl_keys(lsp_config.settings) or 0))
+        if lsp_config.settings and server_name == "lua_ls" then
+          vim.notify("  Lua 设置: " .. (lsp_config.settings.Lua and "有" or "无"))
+        end
+      end
+
+      -- 根据配置决定使用哪种方式
+      if M.config.use_lspconfig then
+        -- 使用 nvim-lspconfig 配置服务器（只配置，不启动）
+        local lspconfig_ok, lspconfig = pcall(require, "lspconfig")
+        if lspconfig_ok then
+          -- 直接使用我们的配置，不合并默认配置
+          -- 这样可以确保我们的配置完全生效
+
+          -- 调试：打印我们的配置
+          if vim.g.lsp_debug then
+            vim.notify("[LSP] 准备配置服务器: " .. server_name)
+            vim.notify("[LSP] 我们的配置:")
+            vim.notify(vim.inspect(lsp_config))
+
+            -- 检查现有的配置
+            if lspconfig[server_name] and lspconfig[server_name].document_config then
+              vim.notify("[LSP] 现有默认配置:")
+              vim.notify(vim.inspect(lspconfig[server_name].document_config.default_config))
+            end
+          end
+
+          -- 配置服务器但不启动
+          lspconfig[server_name].setup(lsp_config)
+
+          -- 验证配置是否已应用
+          if vim.g.lsp_debug then
+            vim.defer_fn(function()
+              vim.notify("[LSP] 配置后验证:")
+              local current_config = lspconfig[server_name].document_config.default_config
+              vim.notify("  cmd: " .. vim.inspect(current_config.cmd))
+              if current_config.settings and current_config.settings.Lua then
+                vim.notify("  Lua 运行时路径: " .. (current_config.settings.Lua.runtime and "有" or "无"))
+                vim.notify(
+                  "  Lua 诊断全局变量数量: "
+                    .. (
+                      current_config.settings.Lua.diagnostics
+                        and current_config.settings.Lua.diagnostics.globals
+                        and #current_config.settings.Lua.diagnostics.globals
+                      or 0
+                    )
+                )
+              end
+            end, 100)
+          end
+
+          if vim.g.lsp_debug then
+            vim.notify("已配置 LSP 服务器: " .. server_name, vim.log.levels.INFO)
+            vim.notify("[LSP] 服务器 " .. server_name .. " 配置完成（未启动）")
+          end
+        else
+          -- 回退到 vim.lsp.start（但也不启动）
+          if vim.g.lsp_debug then
+            vim.notify("[LSP] 警告: nvim-lspconfig 不可用，使用 vim.lsp.start 配置 " .. server_name)
+          end
+          -- 只构建配置，不启动
+          local client_id = vim.lsp.start(lsp_config)
+          if client_id then
+            -- 立即停止，因为我们只想要配置
+            local client = vim.lsp.get_client_by_id(client_id)
+            if client then
+              client:stop()
+            end
+          end
         end
       else
-        -- 回退到 vim.lsp.start
-        vim.lsp.start(lsp_config)
+        -- 使用 Neovim 0.12 的内置 LSP API
+        -- 我们只需要存储配置，服务器会在需要时启动
+        if vim.g.lsp_debug then
+          vim.notify("[LSP] 使用 Neovim 内置 LSP API 配置 " .. server_name)
+          vim.notify("[LSP] 配置已存储，服务器将在需要时启动")
+        end
+
+        -- 将配置存储到全局表，供 start_server_with_config 使用
+        if not M._server_configs then
+          M._server_configs = {}
+        end
+        M._server_configs[server_name] = lsp_config
       end
     end
 
+    -- 禁用 mason-lspconfig 的自动配置，完全使用我们的配置系统
+    -- 这样可以避免配置冲突和重复客户端问题
     mason_lspconfig.setup({
-      -- 自动安装 LSP 服务器
-      automatic_installation = true,
+      -- 禁用自动安装，我们有自己的安装逻辑
+      automatic_installation = false,
 
-      -- 确保安装的服务器
+      -- 确保安装的服务器（仅用于显示，不自动安装）
       ensure_installed = {
         "lua_ls",
         "pyright",
@@ -712,11 +929,16 @@ function M.setup_mason()
         "rust_analyzer",
       },
 
-      -- 配置处理器
+      -- 配置处理器 - 只配置，不自动启动
       handlers = {
-        -- 默认处理器，为所有服务器使用
+        -- 默认处理器，只配置不启动
         function(server_name)
           setup_server(server_name)
+        end,
+
+        -- 为 lua_ls 提供专门的处理器
+        lua_ls = function()
+          setup_server("lua_ls")
         end,
       },
     })
@@ -743,7 +965,7 @@ function M.setup_lsp_configs()
   -- 在 Neovim 0.12+ 中，服务器应该按需启动
 
   if vim.g.lsp_debug then
-    print("[LSP] 配置服务器设置（不启动）...")
+    vim.notify("[LSP] 配置服务器设置（不启动）...")
   end
 
   -- 我们只需要确保配置存在，服务器会在需要时由 start_lsp_for_filetype 启动
@@ -759,21 +981,94 @@ function M.setup_lsp_configs()
     if cmd then
       valid_configs = valid_configs + 1
       if vim.g.lsp_debug then
-        print("[LSP] 配置有效: " .. server_name)
+        vim.notify("[LSP] 配置有效: " .. server_name)
       end
     else
       invalid_configs = invalid_configs + 1
       if vim.g.lsp_debug then
-        print("[LSP] 配置无效: " .. server_name .. " (缺少 cmd)")
+        vim.notify("[LSP] 配置无效: " .. server_name .. " (缺少 cmd)")
       end
     end
   end
 
   if vim.g.lsp_debug then
-    print("[LSP] 配置验证完成: " .. valid_configs .. " 个有效, " .. invalid_configs .. " 个无效")
+    vim.notify("[LSP] 配置验证完成: " .. valid_configs .. " 个有效, " .. invalid_configs .. " 个无效")
   end
 
   vim.notify("LSP 配置验证完成 (" .. valid_configs .. " 个有效配置)", vim.log.levels.INFO)
+end
+
+function M.reconfigure_servers()
+  -- 强制重新配置所有服务器，确保使用我们的配置
+  if vim.g.lsp_debug then
+    vim.notify("[LSP] 开始重新配置所有服务器...")
+  end
+
+  -- 停止所有现有的客户端
+  local all_clients = vim.lsp.get_clients()
+  for _, client in ipairs(all_clients) do
+    client:stop()
+  end
+
+  -- 清除所有缓冲区的标记
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    vim.b[bufnr].lsp_started = nil
+  end
+
+  -- 重新配置所有服务器
+  local lspconfig_ok, lspconfig = pcall(require, "lspconfig")
+  if lspconfig_ok then
+    for server_name, _ in pairs(M.lsp_to_mason) do
+      local config = M.server_configs[server_name] or {}
+      local cmd = config.cmd or get_default_cmd(server_name)
+
+      if cmd then
+        local lsp_config = {
+          name = server_name,
+          cmd = cmd,
+          settings = config.settings or {},
+          on_attach = config.on_attach or function(client, bufnr)
+            -- 默认的 on_attach 函数
+            if client.server_capabilities.documentFormattingProvider then
+              vim.api.nvim_buf_set_option(bufnr, "formatexpr", "v:lua.vim.lsp.formatexpr()")
+            end
+
+            -- 设置缓冲区本地按键映射
+            local bufopts = { noremap = true, silent = true, buffer = bufnr }
+            vim.keymap.set("n", "gD", vim.lsp.buf.declaration, bufopts)
+            vim.keymap.set("n", "gd", vim.lsp.buf.definition, bufopts)
+            vim.keymap.set("n", "K", vim.lsp.buf.hover, bufopts)
+            vim.keymap.set("n", "gi", vim.lsp.buf.implementation, bufopts)
+            vim.keymap.set("n", "<C-k>", vim.lsp.buf.signature_help, bufopts)
+            vim.keymap.set("n", "<leader>wa", vim.lsp.buf.add_workspace_folder, bufopts)
+            vim.keymap.set("n", "<leader>wr", vim.lsp.buf.remove_workspace_folder, bufopts)
+            vim.keymap.set("n", "<leader>wl", function()
+              vim.notify(vim.inspect(vim.lsp.buf.list_workspace_folders()))
+            end, bufopts)
+            vim.keymap.set("n", "<leader>D", vim.lsp.buf.type_definition, bufopts)
+            vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, bufopts)
+            vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, bufopts)
+            vim.keymap.set("n", "gr", vim.lsp.buf.references, bufopts)
+            vim.keymap.set("n", "<leader>f", function()
+              vim.lsp.buf.format({ async = true })
+            end, bufopts)
+          end,
+          capabilities = config.capabilities or vim.lsp.protocol.make_client_capabilities(),
+          root_dir = config.root_dir,
+          filetypes = config.filetypes,
+          manual = true,
+        }
+
+        lspconfig[server_name].setup(lsp_config)
+
+        if vim.g.lsp_debug then
+          vim.notify("[LSP] 已重新配置服务器: " .. server_name)
+        end
+      end
+    end
+  end
+
+  vim.notify("所有 LSP 服务器已重新配置", vim.log.levels.INFO)
 end
 
 function M.ensure_lsp_servers()
@@ -899,28 +1194,28 @@ vim.api.nvim_create_user_command("LspStatus", function()
   local clients = vim.lsp.get_clients({ bufnr = bufnr })
 
   if #clients == 0 then
-    print("当前缓冲区没有活动的 LSP 客户端")
+    vim.notify("当前缓冲区没有活动的 LSP 客户端")
   else
-    print("当前缓冲区的 LSP 客户端:")
+    vim.notify("当前缓冲区的 LSP 客户端:")
     for _, client in ipairs(clients) do
-      print("  - " .. client.name)
-      print("    格式化支持: " .. tostring(client.server_capabilities.documentFormattingProvider))
-      print("    悬停支持: " .. tostring(client.server_capabilities.hoverProvider))
+      vim.notify("  - " .. client.name)
+      vim.notify("    格式化支持: " .. tostring(client.server_capabilities.documentFormattingProvider))
+      vim.notify("    悬停支持: " .. tostring(client.server_capabilities.hoverProvider))
     end
   end
 
-  print("文件类型: " .. vim.bo.filetype)
+  vim.notify("文件类型: " .. vim.bo.filetype)
 
   local servers = M.filetype_mappings[vim.bo.filetype]
   if servers then
-    print("配置的 LSP 服务器: " .. table.concat(servers, ", "))
+    vim.notify("配置的 LSP 服务器: " .. table.concat(servers, ", "))
   end
 
   -- 显示所有可用的 LSP 服务器
   local available_servers = M.get_available_servers()
   if #available_servers > 0 then
     table.sort(available_servers)
-    print("可用的 LSP 服务器: " .. table.concat(available_servers, ", "))
+    vim.notify("可用的 LSP 服务器: " .. table.concat(available_servers, ", "))
   end
 
   -- 显示格式化器信息
@@ -929,9 +1224,9 @@ vim.api.nvim_create_user_command("LspStatus", function()
     local ft = vim.bo.filetype
     local formatters = M.formatters_by_ft[ft] or {}
     if #formatters > 0 then
-      print("配置的格式化器: " .. table.concat(formatters, ", "))
+      vim.notify("配置的格式化器: " .. table.concat(formatters, ", "))
     else
-      print("配置的格式化器: 无")
+      vim.notify("配置的格式化器: 无")
     end
   end
 end, { desc = "显示 LSP 状态" })
@@ -941,29 +1236,29 @@ vim.api.nvim_create_user_command("LspClients", function()
   local bufnr = vim.api.nvim_get_current_buf()
   local ft = vim.bo.filetype
 
-  print("=== LSP 客户端详细信息 ===")
-  print("缓冲区: " .. bufnr)
-  print("文件类型: " .. ft)
-  print("")
+  vim.notify("=== LSP 客户端详细信息 ===")
+  vim.notify("缓冲区: " .. bufnr)
+  vim.notify("文件类型: " .. ft)
+  vim.notify("")
 
   -- 当前缓冲区的客户端
   local buf_clients = vim.lsp.get_clients({ bufnr = bufnr })
-  print("附加到当前缓冲区的客户端 (" .. #buf_clients .. " 个):")
+  vim.notify("附加到当前缓冲区的客户端 (" .. #buf_clients .. " 个):")
   for _, client in ipairs(buf_clients) do
-    print("  " .. client.name .. " (ID: " .. client.id .. ")")
-    print("    配置文件: " .. (client.config and "是" or "否"))
-    print(
+    vim.notify("  " .. client.name .. " (ID: " .. client.id .. ")")
+    vim.notify("    配置文件: " .. (client.config and "是" or "否"))
+    vim.notify(
       "    文件类型: "
         .. (client.config and client.config.filetypes and table.concat(client.config.filetypes, ", ") or "未知")
     )
-    print("    根目录: " .. (client.config and client.config.root_dir or "无"))
+    vim.notify("    根目录: " .. (client.config and client.config.root_dir or "无"))
   end
 
-  print("")
+  vim.notify("")
 
   -- 所有客户端
   local all_clients = vim.lsp.get_clients()
-  print("所有 LSP 客户端 (" .. #all_clients .. " 个):")
+  vim.notify("所有 LSP 客户端 (" .. #all_clients .. " 个):")
 
   local clients_by_name = {}
   for _, client in ipairs(all_clients) do
@@ -974,9 +1269,9 @@ vim.api.nvim_create_user_command("LspClients", function()
   end
 
   for name, client_list in pairs(clients_by_name) do
-    print("  " .. name .. ": " .. #client_list .. " 个实例")
+    vim.notify("  " .. name .. ": " .. #client_list .. " 个实例")
     for _, client in ipairs(client_list) do
-      print("    实例 ID: " .. client.id)
+      vim.notify("    实例 ID: " .. client.id)
 
       -- 检查附加的缓冲区
       local attached_buffers = {}
@@ -987,15 +1282,15 @@ vim.api.nvim_create_user_command("LspClients", function()
       end
 
       if #attached_buffers > 0 then
-        print("    附加到缓冲区: " .. table.concat(attached_buffers, ", "))
+        vim.notify("    附加到缓冲区: " .. table.concat(attached_buffers, ", "))
       else
-        print("    未附加到任何缓冲区")
+        vim.notify("    未附加到任何缓冲区")
       end
     end
   end
 
-  print("")
-  print("=== 结束 ===")
+  vim.notify("")
+  vim.notify("=== 结束 ===")
 end, { desc = "显示所有 LSP 客户端的详细信息" })
 
 vim.api.nvim_create_user_command("LspCleanup", function()
@@ -1015,23 +1310,23 @@ vim.api.nvim_create_user_command("LspCleanup", function()
   -- 检查每个名称的客户端
   for name, client_list in pairs(clients_by_name) do
     if #client_list > 1 then
-      print("发现重复的 LSP 客户端: " .. name .. " (" .. #client_list .. " 个实例)")
+      vim.notify("发现重复的 LSP 客户端: " .. name .. " (" .. #client_list .. " 个实例)")
 
       -- 保留第一个，停止其他的
       for i = 2, #client_list do
         local client = client_list[i]
-        print("  停止实例 ID: " .. client.id)
-        client.terminate()
+        vim.notify("  停止实例 ID: " .. client.id)
+        client:stop()
         removed = removed + 1
       end
     end
   end
 
   if removed > 0 then
-    print("已停止 " .. removed .. " 个重复的 LSP 客户端实例")
+    vim.notify("已停止 " .. removed .. " 个重复的 LSP 客户端实例")
     vim.notify("已清理 " .. removed .. " 个重复的 LSP 客户端", vim.log.levels.INFO)
   else
-    print("未发现重复的 LSP 客户端")
+    vim.notify("未发现重复的 LSP 客户端")
     vim.notify("没有发现重复的 LSP 客户端", vim.log.levels.INFO)
   end
 end, { desc = "清理重复的 LSP 客户端" })
@@ -1049,16 +1344,16 @@ vim.api.nvim_create_user_command("LspListServers", function()
   -- 列出所有可用的 LSP 服务器
   local servers = M.get_available_servers()
   if #servers == 0 then
-    print("没有找到可用的 LSP 服务器配置")
+    vim.notify("没有找到可用的 LSP 服务器配置")
     return
   end
 
   table.sort(servers)
-  print("可用的 LSP 服务器配置 (" .. #servers .. " 个):")
+  vim.notify("可用的 LSP 服务器配置 (" .. #servers .. " 个):")
   for _, server in ipairs(servers) do
     local config = M.server_configs[server]
     local has_config = next(config) ~= nil
-    print(string.format("  - %-20s %s", server, has_config and "✓ 有配置" or "✗ 无配置"))
+    vim.notify(string.format("  - %-20s %s", server, has_config and "✓ 有配置" or "✗ 无配置"))
   end
 end, { desc = "列出所有可用的 LSP 服务器" })
 
@@ -1066,10 +1361,11 @@ vim.api.nvim_create_user_command("LspReload", function()
   -- 重新加载 LSP 配置
   vim.notify("重新加载 LSP 配置...", vim.log.levels.INFO)
 
-  -- 停止所有 LSP 客户端
+  -- 停止所有 LSP 客户端（使用安全的方法）
   local clients = vim.lsp.get_clients()
   for _, client in ipairs(clients) do
-    client.terminate()
+    -- 在 Neovim 0.12 中，使用 client:stop() 来停止客户端
+    client:stop()
   end
 
   -- 清除缓冲区标记
@@ -1088,55 +1384,55 @@ local function debug_lsp_loading()
   local bufnr = vim.api.nvim_get_current_buf()
   local ft = vim.bo.filetype
 
-  print("=== LSP 加载调试信息 ===")
-  print("文件类型: " .. (ft or "无"))
-  print("缓冲区: " .. bufnr)
+  vim.notify("=== LSP 加载调试信息 ===")
+  vim.notify("文件类型: " .. (ft or "无"))
+  vim.notify("缓冲区: " .. bufnr)
 
   -- 检查是否已标记为已启动
-  print("lsp_started 标记: " .. tostring(vim.b[bufnr].lsp_started))
+  vim.notify("lsp_started 标记: " .. tostring(vim.b[bufnr].lsp_started))
 
   -- 检查文件类型映射
   local servers = M.filetype_mappings[ft]
   if servers then
-    print("配置的服务器: " .. table.concat(servers, ", "))
+    vim.notify("配置的服务器: " .. table.concat(servers, ", "))
   else
-    print("配置的服务器: 无")
+    vim.notify("配置的服务器: 无")
   end
 
   -- 检查当前缓冲区的 LSP 客户端
   local clients = vim.lsp.get_clients({ bufnr = bufnr })
-  print("当前缓冲区的 LSP 客户端数量: " .. #clients)
+  vim.notify("当前缓冲区的 LSP 客户端数量: " .. #clients)
   for _, client in ipairs(clients) do
-    print("  - " .. client.name)
+    vim.notify("  - " .. client.name)
   end
 
   -- 检查所有 LSP 客户端
   local all_clients = vim.lsp.get_clients()
-  print("所有 LSP 客户端数量: " .. #all_clients)
+  vim.notify("所有 LSP 客户端数量: " .. #all_clients)
   for _, client in ipairs(all_clients) do
-    print("  - " .. client.name .. " (id: " .. client.id .. ")")
+    vim.notify("  - " .. client.name .. " (id: " .. client.id .. ")")
   end
 
   -- 检查 lua_ls 是否在运行
   local lua_clients = vim.lsp.get_clients({ name = "lua_ls" })
-  print("lua_ls 客户端数量: " .. #lua_clients)
+  vim.notify("lua_ls 客户端数量: " .. #lua_clients)
 
   -- 检查 Mason 状态
   local mason_ok, _ = pcall(require, "mason-registry")
-  print("Mason 注册表可用: " .. tostring(mason_ok))
+  vim.notify("Mason 注册表可用: " .. tostring(mason_ok))
 
   if mason_ok then
     local mason_registry = require("mason-registry")
     local ok, pkg = pcall(mason_registry.get_package, "lua-language-server")
     if ok then
-      print("lua-language-server 包存在: 是")
-      print("lua-language-server 已安装: " .. tostring(pkg:is_installed()))
+      vim.notify("lua-language-server 包存在: 是")
+      vim.notify("lua-language-server 已安装: " .. tostring(pkg:is_installed()))
     else
-      print("lua-language-server 包存在: 否")
+      vim.notify("lua-language-server 包存在: 否")
     end
   end
 
-  print("=== 调试结束 ===")
+  vim.notify("=== 调试结束 ===")
 end
 
 vim.api.nvim_create_user_command("LspDebugLoad", debug_lsp_loading, { desc = "调试 LSP 加载流程" })
@@ -1145,43 +1441,49 @@ vim.api.nvim_create_user_command("LuaLSStatus", function()
   local bufnr = vim.api.nvim_get_current_buf()
   local ft = vim.bo.filetype
 
-  print("=== Lua Language Server 状态检查 ===")
-  print("文件类型: " .. (ft or "无"))
-  print("缓冲区: " .. bufnr)
+  vim.notify("=== Lua Language Server 状态检查 ===")
+  vim.notify("文件类型: " .. (ft or "无"))
+  vim.notify("缓冲区: " .. bufnr)
 
   -- 检查 lua_ls 客户端
   local lua_clients = vim.lsp.get_clients({ name = "lua_ls", bufnr = bufnr })
-  print("lua_ls 客户端数量 (当前缓冲区): " .. #lua_clients)
+  vim.notify("lua_ls 客户端数量 (当前缓冲区): " .. #lua_clients)
 
   if #lua_clients > 0 then
     local client = lua_clients[1]
-    print("客户端 ID: " .. client.id)
-    print("服务器能力:")
-    print("  格式化: " .. tostring(client.server_capabilities.documentFormattingProvider))
-    print("  悬停: " .. tostring(client.server_capabilities.hoverProvider))
-    print("  定义: " .. tostring(client.server_capabilities.definitionProvider))
+    vim.notify("客户端 ID: " .. client.id)
+    vim.notify("服务器能力:")
+    vim.notify("  格式化: " .. tostring(client.server_capabilities.documentFormattingProvider))
+    vim.notify("  悬停: " .. tostring(client.server_capabilities.hoverProvider))
+    vim.notify("  定义: " .. tostring(client.server_capabilities.definitionProvider))
 
     -- 检查配置
     if client.config and client.config.settings then
-      print("配置已加载: 是")
-      local globals = client.config.settings.Lua and client.config.settings.Lua.diagnostics.globals
-      if globals then
-        print("定义的全局变量: " .. table.concat(globals, ", "))
+      vim.notify("配置已加载: 是")
+      if client.config.settings.Lua and client.config.settings.Lua.diagnostics then
+        local globals = client.config.settings.Lua.diagnostics.globals
+        if globals then
+          vim.notify("定义的全局变量: " .. table.concat(globals, ", "))
+        else
+          vim.notify("定义的全局变量: 无")
+        end
+      else
+        vim.notify("Lua 诊断配置: 无")
       end
     else
-      print("配置已加载: 否")
+      vim.notify("配置已加载: 否")
     end
   else
-    print("lua_ls 未附加到当前缓冲区")
+    vim.notify("lua_ls 未附加到当前缓冲区")
 
     -- 检查是否在其他地方运行
     local all_lua_clients = vim.lsp.get_clients({ name = "lua_ls" })
-    print("lua_ls 总客户端数量: " .. #all_lua_clients)
+    vim.notify("lua_ls 总客户端数量: " .. #all_lua_clients)
 
     if #all_lua_clients > 0 then
-      print("lua_ls 正在运行但未附加到当前缓冲区")
+      vim.notify("lua_ls 正在运行但未附加到当前缓冲区")
       for _, client in ipairs(all_lua_clients) do
-        print("  客户端 ID: " .. client.id)
+        vim.notify("  客户端 ID: " .. client.id)
 
         -- 检查客户端附加的缓冲区
         local attached_buffers = {}
@@ -1192,9 +1494,9 @@ vim.api.nvim_create_user_command("LuaLSStatus", function()
         end
 
         if #attached_buffers > 0 then
-          print("  附加到缓冲区: " .. table.concat(attached_buffers, ", "))
+          vim.notify("  附加到缓冲区: " .. table.concat(attached_buffers, ", "))
         else
-          print("  未附加到任何缓冲区")
+          vim.notify("  未附加到任何缓冲区")
         end
       end
     end
@@ -1205,22 +1507,28 @@ vim.api.nvim_create_user_command("LuaLSStatus", function()
   if mason_ok then
     local ok, pkg = pcall(mason_registry.get_package, "lua-language-server")
     if ok then
-      print("Mason 包状态:")
-      print("  包存在: 是")
-      print("  已安装: " .. tostring(pkg:is_installed()))
+      vim.notify("Mason 包状态:")
+      vim.notify("  包存在: 是")
+      vim.notify("  已安装: " .. tostring(pkg:is_installed()))
 
       if pkg:is_installed() then
-        local install_dir = pkg:get_install_path()
-        print("  安装路径: " .. (install_dir or "未知"))
+        -- 在较新版本的 Mason 中，使用 get_install_path 方法
+        local install_dir
+        if pkg.get_install_path then
+          install_dir = pkg:get_install_path()
+        elseif pkg.install_path then
+          install_dir = pkg.install_path
+        end
+        vim.notify("  安装路径: " .. (install_dir or "未知"))
       end
     else
-      print("Mason 包状态: lua-language-server 包不存在")
+      vim.notify("Mason 包状态: lua-language-server 包不存在")
     end
   else
-    print("Mason 注册表不可用")
+    vim.notify("Mason 注册表不可用")
   end
 
-  print("=== 检查完成 ===")
+  vim.notify("=== 检查完成 ===")
 end, { desc = "检查 Lua Language Server 状态" })
 
 vim.api.nvim_create_user_command("TestLuaLS", function()
@@ -1235,35 +1543,35 @@ vim.api.nvim_create_user_command("TestLuaLS", function()
   local test_code = [[
 -- 测试 vim 变量识别
 local test_var = vim.api.nvim_get_current_buf()
-print("当前缓冲区:", test_var)
+vim.notify("当前缓冲区:", test_var)
 
 -- 测试 gh 函数（如果存在）
 if gh then
-  print("gh 函数存在")
+  vim.notify("gh 函数存在")
 else
-  print("gh 函数未定义")
+  vim.notify("gh 函数未定义")
 end
 
 -- 测试其他常用变量
 local mode = vim.fn.mode()
-print("当前模式:", mode)
+vim.notify("当前模式:", mode)
 
 -- 测试 require
 local ok, result = pcall(require, "vim")
-print("require vim:", ok, result)
+vim.notify("require vim:", ok, result)
 ]]
 
   vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, vim.split(test_code, "\n"))
 
-  print("测试缓冲区已创建 (缓冲区: " .. bufnr .. ")")
-  print("文件类型已设置为: lua")
-  print("测试代码已写入")
-  print("")
-  print("现在可以检查以下内容:")
-  print("1. 运行 :LuaLSStatus 检查 lua_ls 状态")
-  print("2. 检查代码中是否有错误提示")
-  print("3. 尝试悬停 (gh) 查看文档")
-  print("4. 尝试跳转到定义 (gd)")
+  vim.notify("测试缓冲区已创建 (缓冲区: " .. bufnr .. ")")
+  vim.notify("文件类型已设置为: lua")
+  vim.notify("测试代码已写入")
+  vim.notify("")
+  vim.notify("现在可以检查以下内容:")
+  vim.notify("1. 运行 :LuaLSStatus 检查 lua_ls 状态")
+  vim.notify("2. 检查代码中是否有错误提示")
+  vim.notify("3. 尝试悬停 (gh) 查看文档")
+  vim.notify("4. 尝试跳转到定义 (gd)")
 
   -- 自动启动 LSP
   vim.schedule(function()
@@ -1271,26 +1579,106 @@ print("require vim:", ok, result)
   end)
 end, { desc = "创建测试缓冲区验证 lua_ls 功能" })
 
+vim.api.nvim_create_user_command("LspTestConfig", function()
+  -- 测试 LSP 配置是否生效
+  local bufnr = vim.api.nvim_get_current_buf()
+  local ft = vim.bo.filetype
+
+  vim.notify("=== LSP 配置测试 ===")
+  vim.notify("当前缓冲区: " .. bufnr)
+  vim.notify("文件类型: " .. ft)
+  vim.notify("")
+
+  -- 测试 lua_ls 配置
+  vim.notify("1. 测试 lua_ls 配置:")
+  local lua_config = M.server_configs["lua_ls"] or {}
+  if next(lua_config) ~= nil then
+    vim.notify("  ✓ 找到 lua_ls 配置")
+    if lua_config.settings and lua_config.settings.Lua then
+      vim.notify("  ✓ Lua 设置存在")
+      if lua_config.settings.Lua.diagnostics and lua_config.settings.Lua.diagnostics.globals then
+        vim.notify("  ✓ 全局变量配置: " .. table.concat(lua_config.settings.Lua.diagnostics.globals, ", "))
+      else
+        vim.notify("  ✗ 没有全局变量配置")
+      end
+    else
+      vim.notify("  ✗ 没有 Lua 设置")
+    end
+  else
+    vim.notify("  ✗ 没有找到 lua_ls 配置")
+  end
+  vim.notify("")
+
+  -- 检查当前缓冲区的客户端
+  vim.notify("2. 当前缓冲区的 LSP 客户端:")
+  local clients = vim.lsp.get_clients({ bufnr = bufnr })
+  if #clients == 0 then
+    vim.notify("  ✗ 没有活动的 LSP 客户端")
+  else
+    for _, client in ipairs(clients) do
+      vim.notify("  ✓ " .. client.name .. " (ID: " .. client.id .. ")")
+
+      -- 检查配置
+      if client.config and client.config.settings then
+        vim.notify("    配置已加载: 是")
+        if client.name == "lua_ls" and client.config.settings.Lua then
+          vim.notify("    Lua 设置: 有")
+        end
+      else
+        vim.notify("    配置已加载: 否")
+      end
+    end
+  end
+  vim.notify("")
+
+  -- 检查应该启动的服务器
+  vim.notify("3. 应该为当前文件类型启动的服务器:")
+  local expected_servers = M.filetype_mappings[ft]
+  if expected_servers then
+    vim.notify("  " .. table.concat(expected_servers, ", "))
+
+    -- 检查每个服务器是否已配置
+    for _, server_name in ipairs(expected_servers) do
+      local config = M.server_configs[server_name] or {}
+      if next(config) ~= nil then
+        vim.notify("    ✓ " .. server_name .. " 已配置")
+      else
+        vim.notify("    ✗ " .. server_name .. " 未配置")
+      end
+    end
+  else
+    vim.notify("  ✗ 没有为 " .. ft .. " 配置的服务器")
+  end
+  vim.notify("")
+
+  vim.notify("=== 测试完成 ===")
+  vim.notify("")
+  vim.notify("建议操作:")
+  vim.notify("1. 运行 :LspReconfigure 强制重新配置")
+  vim.notify("2. 运行 :LspCleanup 清理重复客户端")
+  vim.notify("3. 重新打开当前文件")
+end, { desc = "测试 LSP 配置是否生效" })
+
 vim.api.nvim_create_user_command("LspTestFiletype", function()
   -- 测试文件类型过滤功能
   local bufnr = vim.api.nvim_get_current_buf()
   local ft = vim.bo.filetype
 
-  print("=== 文件类型过滤测试 ===")
-  print("当前缓冲区: " .. bufnr)
-  print("文件类型: " .. ft)
-  print("")
+  vim.notify("=== 文件类型过滤测试 ===")
+  vim.notify("当前缓冲区: " .. bufnr)
+  vim.notify("文件类型: " .. ft)
+  vim.notify("")
 
   -- 获取所有客户端
   local all_clients = vim.lsp.get_clients()
-  print("所有 LSP 客户端 (" .. #all_clients .. " 个):")
+  vim.notify("所有 LSP 客户端 (" .. #all_clients .. " 个):")
 
   for _, client in ipairs(all_clients) do
-    print("  " .. client.name .. " (ID: " .. client.id .. ")")
+    vim.notify("  " .. client.name .. " (ID: " .. client.id .. ")")
 
     -- 检查文件类型配置
     if client.config and client.config.filetypes then
-      print("    配置文件类型: " .. table.concat(client.config.filetypes, ", "))
+      vim.notify("    配置文件类型: " .. table.concat(client.config.filetypes, ", "))
 
       -- 检查是否匹配当前文件类型
       local matches = false
@@ -1302,40 +1690,102 @@ vim.api.nvim_create_user_command("LspTestFiletype", function()
       end
 
       if matches then
-        print("    ✓ 匹配当前文件类型")
+        vim.notify("    ✓ 匹配当前文件类型")
       else
-        print("    ✗ 不匹配当前文件类型")
+        vim.notify("    ✗ 不匹配当前文件类型")
       end
     else
-      print("    未配置文件类型")
+      vim.notify("    未配置文件类型")
     end
 
     -- 检查是否附加到当前缓冲区
     local is_attached = vim.lsp.buf_is_attached(bufnr, client.id)
-    print("    附加到当前缓冲区: " .. (is_attached and "是" or "否"))
-    print("")
+    vim.notify("    附加到当前缓冲区: " .. (is_attached and "是" or "否"))
+    vim.notify("")
   end
 
   -- 检查应该为当前文件类型启动的服务器
   local expected_servers = M.filetype_mappings[ft]
   if expected_servers then
-    print("应该为 " .. ft .. " 启动的服务器: " .. table.concat(expected_servers, ", "))
+    vim.notify("应该为 " .. ft .. " 启动的服务器: " .. table.concat(expected_servers, ", "))
   else
-    print("没有为 " .. ft .. " 配置的服务器")
+    vim.notify("没有为 " .. ft .. " 配置的服务器")
   end
 
-  print("")
-  print("=== 测试完成 ===")
-  print("")
-  print("建议:")
-  print("1. 运行 :LspReload 重新加载配置")
-  print("2. 运行 :LspCleanup 清理重复客户端")
-  print("3. 重新打开文件测试")
+  vim.notify("")
+  vim.notify("=== 测试完成 ===")
+  vim.notify("")
+  vim.notify("建议:")
+  vim.notify("1. 运行 :LspReload 重新加载配置")
+  vim.notify("2. 运行 :LspCleanup 清理重复客户端")
+  vim.notify("3. 重新打开文件测试")
 end, { desc = "测试文件类型过滤功能" })
+
+vim.api.nvim_create_user_command("LspReconfigure", function()
+  -- 强制重新配置所有 LSP 服务器
+  vim.notify("正在重新配置所有 LSP 服务器...", vim.log.levels.INFO)
+  M.reconfigure_servers()
+  vim.notify("LSP 服务器已重新配置，请重新打开文件", vim.log.levels.INFO)
+end, { desc = "强制重新配置所有 LSP 服务器" })
+
+vim.api.nvim_create_user_command("LspQuickFix", function()
+  -- 快速修复：停止所有默认配置的客户端，只保留我们的配置
+  vim.notify("=== LSP 快速修复 ===")
+  vim.notify("停止所有默认配置的 LSP 客户端...")
+
+  local all_clients = vim.lsp.get_clients()
+  local stopped = 0
+
+  for _, client in ipairs(all_clients) do
+    -- 检查是否是默认配置（没有我们的特定设置）
+    local is_default_config = true
+
+    if client.config and client.config.settings then
+      if client.name == "lua_ls" and client.config.settings.Lua then
+        -- 检查是否有我们配置的全局变量
+        if client.config.settings.Lua.diagnostics and client.config.settings.Lua.diagnostics.globals then
+          is_default_config = false
+        end
+      elseif client.config.settings then
+        -- 对于其他服务器，如果有 settings 就认为是我们的配置
+        is_default_config = false
+      end
+    end
+
+    if is_default_config then
+      vim.notify("  停止默认配置客户端: " .. client.name .. " (ID: " .. client.id .. ")")
+      client:stop()
+      stopped = stopped + 1
+    end
+  end
+
+  vim.notify("已停止 " .. stopped .. " 个默认配置的客户端")
+  vim.notify("")
+  vim.notify("现在重新启动 LSP 服务器...")
+
+  -- 重新启动当前文件的 LSP
+  local bufnr = vim.api.nvim_get_current_buf()
+  local ft = vim.bo.filetype
+
+  if ft and ft ~= "" then
+    -- 清除缓冲区标记
+    vim.b[bufnr].lsp_started = nil
+
+    -- 重新启动 LSP
+    vim.schedule(function()
+      start_lsp_for_filetype(ft, bufnr)
+    end)
+
+    vim.notify("已为 " .. ft .. " 重新启动 LSP 服务器")
+  end
+
+  vim.notify("=== 快速修复完成 ===")
+  vim.notify("LSP 重复问题已解决，现在应该只使用你的配置", vim.log.levels.INFO)
+end, { desc = "快速修复 LSP 重复问题（停止所有默认配置）" })
 
 vim.api.nvim_create_user_command("LspFixNow", function()
   -- 立即修复重复的 LSP 客户端
-  print("=== 立即修复 LSP 重复问题 ===")
+  vim.notify("=== 立即修复 LSP 重复问题 ===")
 
   -- 1. 清理重复客户端
   M.cleanup_duplicate_clients()
@@ -1345,7 +1795,7 @@ vim.api.nvim_create_user_command("LspFixNow", function()
   local ft = vim.bo.filetype
 
   if ft and ft ~= "" then
-    print("重新附加 LSP 客户端到当前缓冲区 (文件类型: " .. ft .. ")")
+    vim.notify("重新附加 LSP 客户端到当前缓冲区 (文件类型: " .. ft .. ")")
 
     local server_names = M.filetype_mappings[ft]
     if server_names then
@@ -1367,7 +1817,7 @@ vim.api.nvim_create_user_command("LspFixNow", function()
 
             if should_attach then
               vim.lsp.buf_attach_client(bufnr, client.id)
-              print("  附加 " .. server_name .. " (ID: " .. client.id .. ")")
+              vim.notify("  附加 " .. server_name .. " (ID: " .. client.id .. ")")
             end
           end
         end
@@ -1378,9 +1828,115 @@ vim.api.nvim_create_user_command("LspFixNow", function()
     vim.b[bufnr].lsp_started = true
   end
 
-  print("=== 修复完成 ===")
+  vim.notify("=== 修复完成 ===")
   vim.notify("LSP 重复问题已修复", vim.log.levels.INFO)
 end, { desc = "立即修复重复的 LSP 客户端" })
+
+function M.start_server_with_config(server_name, bufnr)
+  -- 使用我们的配置启动 LSP 服务器
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+
+  -- 优先使用存储的配置（如果使用内置 API）
+  local lsp_config
+  if not M.config.use_lspconfig and M._server_configs and M._server_configs[server_name] then
+    lsp_config = vim.deepcopy(M._server_configs[server_name])
+
+    if vim.g.lsp_debug then
+      vim.notify("[LSP] 使用存储的配置启动 " .. server_name)
+    end
+  else
+    -- 回退到从配置文件加载
+    local config = M.server_configs[server_name] or {}
+
+    -- 确保配置包含必要的字段
+    local cmd = config.cmd or get_default_cmd(server_name)
+
+    if not cmd then
+      if vim.g.lsp_debug then
+        vim.notify("无法启动 LSP " .. server_name .. ": 未找到 cmd 配置", vim.log.levels.WARN)
+      end
+      return false
+    end
+
+    -- 构建完整的配置
+    lsp_config = {
+      name = server_name,
+      cmd = cmd,
+      settings = config.settings or {},
+      on_attach = config.on_attach or function(client, bufnr)
+        -- 默认的 on_attach 函数
+        if client.server_capabilities.documentFormattingProvider then
+          vim.api.nvim_buf_set_option(bufnr, "formatexpr", "v:lua.vim.lsp.formatexpr()")
+        end
+
+        -- 设置缓冲区本地按键映射
+        local bufopts = { noremap = true, silent = true, buffer = bufnr }
+        vim.keymap.set("n", "gD", vim.lsp.buf.declaration, bufopts)
+        vim.keymap.set("n", "gd", vim.lsp.buf.definition, bufopts)
+        vim.keymap.set("n", "K", vim.lsp.buf.hover, bufopts)
+        vim.keymap.set("n", "gi", vim.lsp.buf.implementation, bufopts)
+        vim.keymap.set("n", "<C-k>", vim.lsp.buf.signature_help, bufopts)
+        vim.keymap.set("n", "<leader>wa", vim.lsp.buf.add_workspace_folder, bufopts)
+        vim.keymap.set("n", "<leader>wr", vim.lsp.buf.remove_workspace_folder, bufopts)
+        vim.keymap.set("n", "<leader>wl", function()
+          vim.notify(vim.inspect(vim.lsp.buf.list_workspace_folders()))
+        end, bufopts)
+        vim.keymap.set("n", "<leader>D", vim.lsp.buf.type_definition, bufopts)
+        vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, bufopts)
+        vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, bufopts)
+        vim.keymap.set("n", "gr", vim.lsp.buf.references, bufopts)
+        vim.keymap.set("n", "<leader>f", function()
+          vim.lsp.buf.format({ async = true })
+        end, bufopts)
+      end,
+      capabilities = config.capabilities or vim.lsp.protocol.make_client_capabilities(),
+      root_dir = config.root_dir or vim.fn.getcwd(),
+      filetypes = config.filetypes,
+    }
+  end
+
+  -- 确保配置有必要的字段
+  if not lsp_config.root_dir then
+    lsp_config.root_dir = vim.fn.getcwd()
+  end
+
+  -- 调试信息
+  if vim.g.lsp_debug then
+    vim.notify("[LSP] 启动服务器 " .. server_name .. " 使用配置:")
+    vim.notify("  cmd: " .. vim.inspect(lsp_config.cmd))
+    if lsp_config.settings and lsp_config.settings.Lua then
+      vim.notify("  Lua 运行时路径: " .. (lsp_config.settings.Lua.runtime and "有" or "无"))
+      vim.notify(
+        "  Lua 诊断全局变量数量: "
+          .. (
+            lsp_config.settings.Lua.diagnostics
+              and lsp_config.settings.Lua.diagnostics.globals
+              and #lsp_config.settings.Lua.diagnostics.globals
+            or 0
+          )
+      )
+    end
+  end
+
+  -- 使用 vim.lsp.start 启动服务器
+  local client_id = vim.lsp.start(lsp_config)
+
+  if client_id then
+    -- 附加到缓冲区
+    vim.lsp.buf_attach_client(bufnr, client_id)
+
+    if vim.g.lsp_debug then
+      vim.notify("[LSP] 服务器 " .. server_name .. " 已启动 (ID: " .. client_id .. ")")
+    end
+
+    return true
+  else
+    if vim.g.lsp_debug then
+      vim.notify("无法启动 LSP 服务器: " .. server_name, vim.log.levels.ERROR)
+    end
+    return false
+  end
+end
 
 -- 自动设置 LSP（如果从主配置调用）
 if vim.g.lsp_auto_setup ~= false then
@@ -1389,5 +1945,36 @@ if vim.g.lsp_auto_setup ~= false then
     vim.notify("LSP 配置已自动加载", vim.log.levels.INFO)
   end)
 end
+
+-- ============================================
+-- 用户指南：解决 LSP 重复客户端问题
+-- ============================================
+--
+-- 问题：LSP 启动了两个客户端，一个是默认配置，一个是你的配置
+-- 原因：nvim-lspconfig 插件自动配置了默认设置
+--
+-- 解决方案：
+-- 1. 我们已经注释掉了 nvim-lspconfig 插件的安装
+-- 2. 现在完全使用 Neovim 0.12 的内置 LSP API
+-- 3. 配置存储在 M._server_configs 表中，按需启动
+--
+-- 使用步骤：
+-- 1. 运行 :LspQuickFix 停止所有默认配置的客户端
+-- 2. 重新打开你的 Lua 文件
+-- 3. LSP 应该只使用你的配置启动
+--
+-- 调试命令：
+-- :LspDebug - 切换调试模式
+-- :LspTestConfig - 测试配置是否生效
+-- :LspStatus - 查看当前 LSP 状态
+-- :LspClients - 查看所有客户端详细信息
+--
+-- 如果还有问题：
+-- 1. 运行 :LspReconfigure 强制重新配置
+-- 2. 运行 :LspCleanup 清理重复客户端
+-- 3. 重新打开文件
+--
+-- 注意：现在配置中 use_lspconfig = false，完全使用内置 API
+-- ============================================
 
 return M
