@@ -1,275 +1,65 @@
-当前缓冲区的 LSP 客户端:                                                - lua_ls
-client.supports_method is deprecated. Run ":checkhealth vi                格式化支持: true
-悬停支持: true
-- stylua
-格式化支持: true
-悬停支持: false
-- GitHub Copilot
-格式化支持: false                                                     悬停支持: false
-文件类型: lua
-配置的 LSP 服务器: lua_ls, html
-可用的 LSP 服务器: bashls, clangd, cssls, gopls, html, jsonls, lua_ls,
-pyright, rust_analyzer, tsserver, yamlls                             配置的格式化器: stylua
-Press ENTER or type command to continue"
+35. [11:30:14] [INFO] conform.nvim 已配置
 
-- LSP log level : WARN
-- Log path: /root/.local/state/nvim/lsp.log
-- Log size: 680 KB
+ 36. [11:30:14] [INFO] LSP 和 conform.nvim 配置已加载
 
-vim.lsp: Active Features ~
-- semantic_tokens
-  - Active buffers:
-      [1]: lua_ls (id: 1)
-- document_color
-  - Active buffers:
-      [1]: lua_ls (id: 1)
-- inline_completion
-  - Active buffers:
+ 37. [11:30:14] [INFO] LSP 配置已自动加载
 
-- codelens
-  - Active buffers:
+ 38. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
 
-- folding_range
-  - Active buffers:
+ 39. [11:30:15] [INFO] 警告: 无法加载 mcp 配置，使用简化版本
 
+ 40. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
 
-vim.lsp: Active Clients ~
-- lua_ls (id: 1)
-  - Version: 3.18.1
-  - Root directory: ~/NeoAI/pack/plugins/start/NeoAI
-  - Command: { "lua-language-server" }
-  - Settings: {
-      Lua = {
-        codeLens = {
-          enable = true
-        },
-        hint = {
-          enable = true,
-          semicolon = "Disable"
-        }
-      }
-    }
-  - Attached buffers: 1
-- stylua (id: 2)
-  - Version: 2.4.1
-  - Root directory: nil
-  - Command: { "stylua", "--lsp" }
-  - Settings: {}
-  - Attached buffers: 1
-- GitHub Copilot (id: 3)
-  - Version: 1.470.0
-  - Root directory: nil
-  - Command: { "npx", "@github/copilot-language-server@^1.408.0", "--stdio" }
-  - Settings: {
-      ["github-enterprise"] = {
-        uri = vim.NIL
-      },
-      http = {
-        proxy = vim.NIL,
-        proxyStrictSSL = vim.NIL
-      }
-    }
-  - Attached buffers: 1
+ 41. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
 
-vim.lsp: Enabled Configurations ~
-- bashls:
-  - cmd: { "bash-language-server", "start" }
-  - filetypes: bash, sh
-  - root_markers: { ".git" }
-  - settings: {
-      bashIde = {
-        globPattern = "*@(.sh|.inc|.bash|.command)"
-      }
-    }
+ 42. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
 
-- clangd:
-  - capabilities: {
-      offsetEncoding = { "utf-8", "utf-16" },
-      textDocument = {
-        completion = {
-          editsNearCursor = true
-        }
-      }
-    }
-  - cmd: { "clangd" }
-  - filetypes: c, cpp, objc, objcpp, cuda
-  - get_language_id: <function @/root/.local/share/nvim/site/pack/core/opt/nvim-lspconfig/lsp/clangd.lua:77>
-  - on_attach: <function @/root/.local/share/nvim/site/pack/core/opt/nvim-lspconfig/lsp/clangd.lua:95>
-  - on_init: <function @/root/.local/share/nvim/site/pack/core/opt/nvim-lspconfig/lsp/clangd.lua:90>
-  - root_markers: { ".clangd", ".clang-tidy", ".clang-format", "compile_commands.json", "compile_flags.txt", "configure.ac", ".git" }
+ 43. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
 
-- cssls:
-  - cmd: { "vscode-css-language-server", "--stdio" }
-  - filetypes: css, scss, less
-  - init_options: {
-      provideFormatter = true
-    }
-  - root_markers: { "package.json", ".git" }
-  - settings: {
-      css = {
-        validate = true
-      },
-      less = {
-        validate = true
-      },
-      scss = {
-        validate = true
-      }
-    }
+ 44. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
 
-- ⚠️ WARNING Unknown filetype 'gowork' (Hint: filename extension != filetype).
-- ⚠️ WARNING Unknown filetype 'gotmpl' (Hint: filename extension != filetype).
-- gopls:
-  - cmd: { "gopls" }
-  - filetypes: go, gomod, gowork, gotmpl
-  - root_dir: <function @/root/.local/share/nvim/site/pack/core/opt/nvim-lspconfig/lsp/gopls.lua:92>
+ 45. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
 
-- html:
-  - cmd: { "vscode-html-language-server", "--stdio" }
-  - filetypes: html
-  - init_options: {
-      configurationSection = { "html", "css", "javascript" },
-      embeddedLanguages = {
-        css = true,
-        javascript = true
-      },
-      provideFormatter = true
-    }
-  - root_markers: { "package.json", ".git" }
-  - settings: {}
+ 46. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
 
-- jsonls:
-  - cmd: { "vscode-json-language-server", "--stdio" }
-  - filetypes: json, jsonc
-  - init_options: {
-      provideFormatter = true
-    }
-  - root_markers: { ".git" }
+ 47. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
 
-- lua_ls:
-  - cmd: { "lua-language-server" }
-  - filetypes: lua
-  - root_markers: { { ".emmyrc.json", ".luarc.json", ".luarc.jsonc" }, { ".luacheckrc", ".stylua.toml", "stylua.toml", "selene.toml", "selene.yml" }, { ".git" } }
-  - settings: {
-      Lua = {
-        codeLens = {
-          enable = true
-        },
-        hint = {
-          enable = true,
-          semicolon = "Disable"
-        }
-      }
-    }
+ 48. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
 
-- pyright:
-  - cmd: { "pyright-langserver", "--stdio" }
-  - filetypes: python
-  - on_attach: <function @/root/.local/share/nvim/site/pack/core/opt/nvim-lspconfig/lsp/pyright.lua:47>
-  - root_markers: { "pyrightconfig.json", "pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "Pipfile", ".git" }
-  - settings: {
-      python = {
-        analysis = {
-          autoSearchPaths = true,
-          diagnosticMode = "openFilesOnly",
-          useLibraryCodeForTypes = true
-        }
-      }
-    }
+ 49. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
 
-- rust_analyzer:
-  - before_init: <function @/root/.local/share/nvim/site/pack/core/opt/nvim-lspconfig/lsp/rust_analyzer.lua:164>
-  - capabilities: {
-      experimental = {
-        commands = {
-          commands = { "rust-analyzer.showReferences", "rust-analyzer.runSingle", "rust-analyzer.debugSingle" }
-        },
-        serverStatusNotification = true
-      }
-    }
-  - cmd: { "rust-analyzer" }
-  - filetypes: rust
-  - on_attach: <function @/root/.local/share/nvim/site/pack/core/opt/nvim-lspconfig/lsp/rust_analyzer.lua:188>
-  - root_dir: <function @/root/.local/share/nvim/site/pack/core/opt/nvim-lspconfig/lsp/rust_analyzer.lua:88>
-  - settings: {
-      ["rust-analyzer"] = {
-        lens = {
-          debug = {
-            enable = true
-          },
-          enable = true,
-          implementations = {
-            enable = true
-          },
-          references = {
-            adt = {
-              enable = true
-            },
-            enumVariant = {
-              enable = true
-            },
-            method = {
-              enable = true
-            },
-            trait = {
-              enable = true
-            }
-          },
-          run = {
-            enable = true
-          },
-          updateTest = {
-            enable = true
-          }
-        }
-      }
-    }
+ 50. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
 
-- stylua:
-  - cmd: { "stylua", "--lsp" }
-  - filetypes: lua
-  - root_markers: { ".stylua.toml", "stylua.toml", ".editorconfig" }
+ 51. [11:30:15] [INFO] LSP 服务器配置完成
 
-- ts_ls:
-  - cmd: { "typescript-language-server", "--stdio" }
-  - commands: {
-      ["editor.action.showReferences"] = <function 1>
-    }
-  - filetypes: javascript, javascriptreact, typescript, typescriptreact
-  - handlers: {
-      ["_typescript.rename"] = <function 1>
-    }
-  - init_options: {
-      hostInfo = "neovim"
-    }
-  - on_attach: <function @/root/.local/share/nvim/site/pack/core/opt/nvim-lspconfig/lsp/ts_ls.lua:153>
-  - root_dir: <function @/root/.local/share/nvim/site/pack/core/opt/nvim-lspconfig/lsp/ts_ls.lua:86>
+ 52. [11:30:15] [INFO] 所有 LSP 服务器已安装 (11 个)
 
-- ⚠️ WARNING Unknown filetype 'yaml.docker-compose' (Hint: filename extension != filetype).
-- ⚠️ WARNING Unknown filetype 'yaml.gitlab' (Hint: filename extension != filetype).
-- ⚠️ WARNING Unknown filetype 'yaml.helm-values' (Hint: filename extension != filetype).
-- yamlls:
-  - cmd: { "yaml-language-server", "--stdio" }
-  - filetypes: yaml, yaml.docker-compose, yaml.gitlab, yaml.helm-values
-  - on_init: <function @/root/.local/share/nvim/site/pack/core/opt/nvim-lspconfig/lsp/yamlls.lua:74>
-  - root_markers: { ".git" }
-  - settings: {
-      redhat = {
-        telemetry = {
-          enabled = false
-        }
-      },
-      yaml = {
-        format = {
-          enable = true
-        }
-      }
-    }
+ 53. [11:30:15] [INFO] 所有格式化工具已安装 (30 个)
 
+ 54. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
 
-vim.lsp: File Watcher ~
-- file watching "(workspace/didChangeWatchedFiles)" disabled on all clients
+ 55. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
 
-vim.lsp: Position Encodings ~
-- No buffers contain mixed position encodings
+ 56. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
 
+ 57. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
+
+ 58. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
+
+ 59. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
+
+ 60. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
+
+ 61. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
+
+ 62. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
+
+ 63. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
+
+ 64. [11:30:15] [WARN] ..._nvim-lAlGACl/usr/share/nvim/runtime/lua/vim/lsp/rpc.lua:660: cmd: expected table, got nil
+
+ 65. [11:30:15] [INFO] LSP 服务器配置完成
+
+ 66. [11:30:16] [INFO] 所有 LSP 服务器已安装 (11 个)
+
+ 67. [11:30:16] [INFO] 所有格式化工具已安装 (30 个)
