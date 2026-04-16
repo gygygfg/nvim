@@ -405,111 +405,51 @@ local function start_lsp_for_filetype(ft, bufnr)
 
   local started_servers = {}
   for _, server_name in ipairs(server_names) do
-    -- 检查服务器是否已启动并附加到当前缓冲区
+    -- 检查服务器是否已附加到当前缓冲区
     local clients = vim.lsp.get_clients({ name = server_name, bufnr = bufnr })
-    if #clients == 0 then
-      -- 服务器未附加到当前缓冲区，尝试附加或启动
-      local all_clients = vim.lsp.get_clients({ name = server_name })
-      if #all_clients > 0 then
-        -- 服务器已启动，检查文件类型是否匹配
-        local should_attach = false
-        for _, client in ipairs(all_clients) do
-          -- 检查客户端的文件类型配置
-          if client.config and client.config.filetypes then
-            -- 客户端配置了文件类型，检查是否匹配
-            for _, client_ft in ipairs(client.config.filetypes) do
-              if client_ft == ft then
-                should_attach = true
-                break
-              end
-            end
-          else
-            -- 客户端没有配置文件类型，默认附加
-            should_attach = true
-          end
-
-          if should_attach and not vim.lsp.buf_is_attached(bufnr, client.id) then
-            vim.lsp.buf_attach_client(bufnr, client.id)
-          end
-        end
-
-        if should_attach then
-          table.insert(started_servers, server_name)
-        elseif vim.g.lsp_debug then
-          print("[LSP] 跳过附加 " .. server_name .. " 到 " .. ft .. ": 文件类型不匹配")
-        end
-      else
-        -- 服务器未启动，尝试使用 vim.lsp.config 启动
-        -- 注意：在 Neovim 0.12+ 中，服务器通常由 mason-lspconfig 自动启动
-        -- 我们只需要确保配置存在
-        local config = M.server_configs[server_name] or {}
-
-        -- 确保配置包含必要的字段
-        local cmd = config.cmd or get_default_cmd(server_name)
-
-        -- 如果 cmd 为 nil，跳过该服务器
-        if not cmd then
-          if vim.g.lsp_debug then
-            vim.notify("跳过 LSP " .. server_name .. ": 未找到 cmd 配置", vim.log.levels.WARN)
-          end
-          goto continue
-        end
-
-        local lsp_config = {
-          name = server_name,
-          cmd = cmd,
-          settings = config.settings or {},
-          on_attach = config.on_attach or function(client, bufnr)
-            -- 默认的 on_attach 函数
-            if client.server_capabilities.documentFormattingProvider then
-              vim.api.nvim_buf_set_option(bufnr, "formatexpr", "v:lua.vim.lsp.formatexpr()")
-            end
-
-            -- 设置缓冲区本地按键映射
-            local bufopts = { noremap = true, silent = true, buffer = bufnr }
-            vim.keymap.set("n", "gD", vim.lsp.buf.declaration, bufopts)
-            vim.keymap.set("n", "gd", vim.lsp.buf.definition, bufopts)
-            vim.keymap.set("n", "K", vim.lsp.buf.hover, bufopts)
-            vim.keymap.set("n", "gi", vim.lsp.buf.implementation, bufopts)
-            vim.keymap.set("n", "<C-k>", vim.lsp.buf.signature_help, bufopts)
-            vim.keymap.set("n", "<leader>wa", vim.lsp.buf.add_workspace_folder, bufopts)
-            vim.keymap.set("n", "<leader>wr", vim.lsp.buf.remove_workspace_folder, bufopts)
-            vim.keymap.set("n", "<leader>wl", function()
-              print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
-            end, bufopts)
-            vim.keymap.set("n", "<leader>D", vim.lsp.buf.type_definition, bufopts)
-            vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, bufopts)
-            vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, bufopts)
-            vim.keymap.set("n", "gr", vim.lsp.buf.references, bufopts)
-            vim.keymap.set("n", "<leader>f", function()
-              vim.lsp.buf.format({ async = true })
-            end, bufopts)
-          end,
-          capabilities = config.capabilities or vim.lsp.protocol.make_client_capabilities(),
-          root_dir = config.root_dir,
-          filetypes = config.filetypes,
-        }
-
-        -- 尝试启动服务器
-        -- 在 Neovim 0.12+ 中，我们可以使用 vim.lsp.start 启动服务器
-        local success, err = pcall(function()
-          vim.lsp.start(lsp_config)
-        end)
-
-        if success then
-          table.insert(started_servers, server_name)
-          if vim.g.lsp_debug then
-            vim.notify("成功启动 LSP: " .. server_name, vim.log.levels.INFO)
-          end
-        elseif vim.g.lsp_debug then
-          vim.notify("启动 LSP " .. server_name .. " 失败: " .. tostring(err), vim.log.levels.WARN)
-        end
-
-        ::continue::
-      end
-    else
+    if #clients > 0 then
       -- 服务器已附加到当前缓冲区
       table.insert(started_servers, server_name)
+    else
+      -- 服务器未附加到当前缓冲区，尝试附加到已存在的客户端
+      local all_clients = vim.lsp.get_clients({ name = server_name })
+      local attached = false
+
+      for _, client in ipairs(all_clients) do
+        -- 检查文件类型是否匹配
+        local should_attach = true
+        if client.config and client.config.filetypes then
+          should_attach = false
+          for _, client_ft in ipairs(client.config.filetypes) do
+            if client_ft == ft then
+              should_attach = true
+              break
+            end
+          end
+        end
+
+        if should_attach and not vim.lsp.buf_is_attached(bufnr, client.id) then
+          vim.lsp.buf_attach_client(bufnr, client.id)
+          attached = true
+          if vim.g.lsp_debug then
+            vim.notify("附加到已存在的 LSP 客户端: " .. server_name, vim.log.levels.INFO)
+          end
+        elseif vim.lsp.buf_is_attached(bufnr, client.id) then
+          attached = true
+        end
+      end
+
+      if attached then
+        table.insert(started_servers, server_name)
+      elseif vim.g.lsp_debug then
+        vim.notify(
+          "跳过 LSP " .. server_name .. ": 没有可用的客户端或文件类型不匹配",
+          vim.log.levels.WARN
+        )
+      end
+
+      -- 注意：我们不在这里启动新的服务器，让 mason-lspconfig 处理服务器启动
+      -- 这样可以避免重复启动同一个服务器
     end
   end
 
@@ -617,6 +557,54 @@ function M.setup()
   M.setup_mason()
 
   vim.notify("LSP 和 conform.nvim 配置已加载")
+
+  -- 清理可能存在的重复客户端
+  vim.defer_fn(function()
+    M.cleanup_duplicate_clients()
+  end, 500)
+end
+
+function M.cleanup_duplicate_clients()
+  -- 清理重复的 LSP 客户端
+  local all_clients = vim.lsp.get_clients()
+  local clients_by_name = {}
+  local removed = 0
+
+  -- 按名称分组客户端
+  for _, client in ipairs(all_clients) do
+    if not clients_by_name[client.name] then
+      clients_by_name[client.name] = {}
+    end
+    table.insert(clients_by_name[client.name], client)
+  end
+
+  -- 检查每个名称的客户端
+  for name, client_list in pairs(clients_by_name) do
+    if #client_list > 1 then
+      if vim.g.lsp_debug then
+        print("发现重复的 LSP 客户端: " .. name .. " (" .. #client_list .. " 个实例)")
+      end
+
+      -- 保留第一个（通常是最早启动的），停止其他的
+      for i = 2, #client_list do
+        local client = client_list[i]
+        if vim.g.lsp_debug then
+          print("  停止实例 ID: " .. client.id)
+        end
+        client.terminate()
+        removed = removed + 1
+      end
+    end
+  end
+
+  if removed > 0 then
+    if vim.g.lsp_debug then
+      print("已停止 " .. removed .. " 个重复的 LSP 客户端实例")
+    end
+    vim.notify("已清理 " .. removed .. " 个重复的 LSP 客户端", vim.log.levels.INFO)
+  elseif vim.g.lsp_debug then
+    print("未发现重复的 LSP 客户端")
+  end
 end
 
 function M.setup_mason()
@@ -641,6 +629,70 @@ function M.setup_mason()
   -- 配置 mason-lspconfig
   local mason_lspconfig_ok, mason_lspconfig = pcall(require, "mason-lspconfig")
   if mason_lspconfig_ok then
+    -- 定义处理器函数
+    local function setup_server(server_name)
+      local config = M.server_configs[server_name] or {}
+
+      -- 确保配置包含必要的字段
+      local cmd = config.cmd or get_default_cmd(server_name)
+
+      if not cmd then
+        if vim.g.lsp_debug then
+          vim.notify("跳过 LSP " .. server_name .. ": 未找到 cmd 配置", vim.log.levels.WARN)
+        end
+        return
+      end
+
+      -- 构建完整的配置
+      local lsp_config = {
+        name = server_name,
+        cmd = cmd,
+        settings = config.settings or {},
+        on_attach = config.on_attach or function(client, bufnr)
+          -- 默认的 on_attach 函数
+          if client.server_capabilities.documentFormattingProvider then
+            vim.api.nvim_buf_set_option(bufnr, "formatexpr", "v:lua.vim.lsp.formatexpr()")
+          end
+
+          -- 设置缓冲区本地按键映射
+          local bufopts = { noremap = true, silent = true, buffer = bufnr }
+          vim.keymap.set("n", "gD", vim.lsp.buf.declaration, bufopts)
+          vim.keymap.set("n", "gd", vim.lsp.buf.definition, bufopts)
+          vim.keymap.set("n", "K", vim.lsp.buf.hover, bufopts)
+          vim.keymap.set("n", "gi", vim.lsp.buf.implementation, bufopts)
+          vim.keymap.set("n", "<C-k>", vim.lsp.buf.signature_help, bufopts)
+          vim.keymap.set("n", "<leader>wa", vim.lsp.buf.add_workspace_folder, bufopts)
+          vim.keymap.set("n", "<leader>wr", vim.lsp.buf.remove_workspace_folder, bufopts)
+          vim.keymap.set("n", "<leader>wl", function()
+            print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
+          end, bufopts)
+          vim.keymap.set("n", "<leader>D", vim.lsp.buf.type_definition, bufopts)
+          vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, bufopts)
+          vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, bufopts)
+          vim.keymap.set("n", "gr", vim.lsp.buf.references, bufopts)
+          vim.keymap.set("n", "<leader>f", function()
+            vim.lsp.buf.format({ async = true })
+          end, bufopts)
+        end,
+        capabilities = config.capabilities or vim.lsp.protocol.make_client_capabilities(),
+        root_dir = config.root_dir,
+        filetypes = config.filetypes,
+        manual = true, -- 手动启动，避免自动启动
+      }
+
+      -- 使用 nvim-lspconfig 配置服务器
+      local lspconfig_ok, lspconfig = pcall(require, "lspconfig")
+      if lspconfig_ok then
+        lspconfig[server_name].setup(lsp_config)
+        if vim.g.lsp_debug then
+          vim.notify("已配置 LSP 服务器: " .. server_name, vim.log.levels.INFO)
+        end
+      else
+        -- 回退到 vim.lsp.start
+        vim.lsp.start(lsp_config)
+      end
+    end
+
     mason_lspconfig.setup({
       -- 自动安装 LSP 服务器
       automatic_installation = true,
@@ -659,10 +711,15 @@ function M.setup_mason()
         "gopls",
         "rust_analyzer",
       },
-    })
 
-    -- mason-lspconfig 会自动配置 LSP 服务器
-    -- 不需要手动设置 setup_handlers
+      -- 配置处理器
+      handlers = {
+        -- 默认处理器，为所有服务器使用
+        function(server_name)
+          setup_server(server_name)
+        end,
+      },
+    })
   end
 
   -- 安装推荐的 LSP 服务器和格式化工具
@@ -964,7 +1021,7 @@ vim.api.nvim_create_user_command("LspCleanup", function()
       for i = 2, #client_list do
         local client = client_list[i]
         print("  停止实例 ID: " .. client.id)
-        client.stop()
+        client.terminate()
         removed = removed + 1
       end
     end
@@ -1012,7 +1069,7 @@ vim.api.nvim_create_user_command("LspReload", function()
   -- 停止所有 LSP 客户端
   local clients = vim.lsp.get_clients()
   for _, client in ipairs(clients) do
-    client.stop()
+    client.terminate()
   end
 
   -- 清除缓冲区标记
@@ -1275,6 +1332,55 @@ vim.api.nvim_create_user_command("LspTestFiletype", function()
   print("2. 运行 :LspCleanup 清理重复客户端")
   print("3. 重新打开文件测试")
 end, { desc = "测试文件类型过滤功能" })
+
+vim.api.nvim_create_user_command("LspFixNow", function()
+  -- 立即修复重复的 LSP 客户端
+  print("=== 立即修复 LSP 重复问题 ===")
+
+  -- 1. 清理重复客户端
+  M.cleanup_duplicate_clients()
+
+  -- 2. 重新附加到当前缓冲区
+  local bufnr = vim.api.nvim_get_current_buf()
+  local ft = vim.bo.filetype
+
+  if ft and ft ~= "" then
+    print("重新附加 LSP 客户端到当前缓冲区 (文件类型: " .. ft .. ")")
+
+    local server_names = M.filetype_mappings[ft]
+    if server_names then
+      for _, server_name in ipairs(server_names) do
+        local clients = vim.lsp.get_clients({ name = server_name })
+        for _, client in ipairs(clients) do
+          if not vim.lsp.buf_is_attached(bufnr, client.id) then
+            -- 检查文件类型是否匹配
+            local should_attach = true
+            if client.config and client.config.filetypes then
+              should_attach = false
+              for _, client_ft in ipairs(client.config.filetypes) do
+                if client_ft == ft then
+                  should_attach = true
+                  break
+                end
+              end
+            end
+
+            if should_attach then
+              vim.lsp.buf_attach_client(bufnr, client.id)
+              print("  附加 " .. server_name .. " (ID: " .. client.id .. ")")
+            end
+          end
+        end
+      end
+    end
+
+    -- 更新缓冲区标记
+    vim.b[bufnr].lsp_started = true
+  end
+
+  print("=== 修复完成 ===")
+  vim.notify("LSP 重复问题已修复", vim.log.levels.INFO)
+end, { desc = "立即修复重复的 LSP 客户端" })
 
 -- 自动设置 LSP（如果从主配置调用）
 if vim.g.lsp_auto_setup ~= false then
