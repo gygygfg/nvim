@@ -30,7 +30,7 @@ local function toggle_chat_fullscreen()
       height = win_config.height,
       col = win_config.col,
       row = win_config.row,
-      is_fullscreen = false
+      is_fullscreen = false,
     }
 
     -- 设置全屏
@@ -74,7 +74,7 @@ local function toggle_chat_fullscreen()
         height = wininfo.height,
         col = wininfo.wincol - 1,
         row = wininfo.winrow - 1,
-        is_fullscreen = false
+        is_fullscreen = false,
       }
 
       -- 设置全屏
@@ -111,7 +111,7 @@ function M.setup(opts)
   local mcphub_success, mcphub = pcall(require, "mcphub")
   if mcphub_success and mcphub then
     mcphub.setup({
-      auto_approve = true,                              -- 自动批准所有 MCP 工具调用
+      auto_approve = true, -- 自动批准所有 MCP 工具调用
       config_dir = vim.fn.expand("~/.config/nvim/mcp"), -- MCP 配置文件目录
     })
     -- vim.notify("✅ MCP Hub 初始化成功", vim.log.levels.INFO)
@@ -200,12 +200,15 @@ function M.setup(opts)
     end
   else
     vim.notify("⚠️  MCP 集成模块加载失败，但基本 MCP 功能仍然可用", vim.log.levels.WARN)
-    vim.notify("💡 这不会影响 MCP 工具的基本功能，只是缺少一些高级集成特性", vim.log.levels.INFO)
+    vim.notify(
+      "💡 这不会影响 MCP 工具的基本功能，只是缺少一些高级集成特性",
+      vim.log.levels.INFO
+    )
   end
 
   -- 初始化动态工具管理器
-  local dynamic_tool_manager_success, dynamic_tool_manager = pcall(require,
-    "plugins.CodeCompanion.mcp.dynamic_tool_manager")
+  local dynamic_tool_manager_success, dynamic_tool_manager =
+    pcall(require, "plugins.CodeCompanion.mcp.dynamic_tool_manager")
   if dynamic_tool_manager_success and dynamic_tool_manager then
     dynamic_tool_manager.setup()
     -- vim.notify("✅ 动态工具管理器初始化成功", vim.log.levels.INFO)

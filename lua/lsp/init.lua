@@ -105,6 +105,18 @@ M.formatter_to_mason = {
   codespell = "codespell",
 }
 
+-- 跳过 LSP 检查和格式化的文件类型
+M.skip_filetypes = {
+  notify = true, -- vim.notify 插件弹出的悬浮文本
+  NvimTree = true, -- 文件管理器
+  TelescopePrompt = true, -- Telescope 提示框
+  packer = true, -- 插件管理器
+  help = true, -- 帮助文档
+  qf = true, -- 快速修复列表
+  terminal = true, -- 终端
+  [""] = true, -- 空文件类型
+}
+
 local function load_server_config(server_name)
   -- 动态加载 LSP 服务器配置
   local ok, config = pcall(require, "lsp.configs." .. server_name)
@@ -214,7 +226,7 @@ local function setup_conform()
     fallback_conform = function(bufnr)
       local clients = vim.lsp.get_clients({ bufnr = bufnr })
       for _, client in ipairs(clients) do
-        if client.supports_method("textDocument/formatting") then
+        if client.server_capabilities.documentFormattingProvider then
           vim.lsp.buf.format({ async = false, bufnr = bufnr })
           return true
         end
@@ -273,7 +285,7 @@ local function setup_global_keymaps()
       local clients = vim.lsp.get_clients({ bufnr = bufnr })
       local formatting_clients = {}
       for _, client in ipairs(clients) do
-        if client.supports_method("textDocument/formatting") then
+        if client.server_capabilities.documentFormattingProvider then
           table.insert(formatting_clients, client.name)
         end
       end
@@ -311,7 +323,8 @@ local function setup_diagnostics()
     },
     signs = true,
     underline = true,
-    update_in_insert = false,
+    -- 在插入模式下也更新诊断
+    update_in_insert = true,
     severity_sort = true,
     float = {
       border = "rounded",
@@ -319,6 +332,8 @@ local function setup_diagnostics()
       header = "",
       prefix = "",
     },
+    -- 启用异步诊断
+    virtual_lines = false,
   })
 
   -- 设置诊断符号
@@ -339,9 +354,20 @@ local function start_lsp_for_filetype(ft, bufnr)
   -- 启动文件类型的 LSP
   bufnr = bufnr or vim.api.nvim_get_current_buf()
 
+  -- 跳过不需要 LSP 检查的文件类型
+  if M.skip_filetypes[ft] then
+    return
+  end
+
   -- 避免重复启动
   if vim.b[bufnr].lsp_started then
     return
+  end
+
+  -- 通知 LSP 语法检查开始（仅在调试模式下显示）
+  if vim.g.lsp_debug then
+    local current_time = os.date("%H:%M:%S")
+    vim.notify("开始 LSP 语法检查: " .. ft .. " (" .. current_time .. ")", vim.log.levels.INFO)
   end
 
   local server_names = M.filetype_mappings[ft]
@@ -349,26 +375,52 @@ local function start_lsp_for_filetype(ft, bufnr)
     return
   end
 
-  -- 启动每个 LSP 服务器
+  -- 使用 lspconfig 启动服务器
+  local lspconfig_ok, lspconfig = pcall(require, "lspconfig")
+  if not lspconfig_ok then
+    vim.notify("lspconfig 插件未加载", vim.log.levels.ERROR)
+    return
+  end
+
+  local started_servers = {}
   for _, server_name in ipairs(server_names) do
-    local config = M.server_configs[server_name] or {}
-
-    -- 使用 pcall 安全地启动 LSP
-    local success, err = pcall(vim.lsp.config, server_name, config)
-    if not success then
-      vim.notify("配置 LSP " .. server_name .. " 失败: " .. tostring(err), vim.log.levels.WARN)
-    end
-
-    success, err = pcall(vim.lsp.enable, server_name)
-    if success then
-      vim.b[bufnr].lsp_started = true
-    else
-      vim.notify("启动 LSP " .. server_name .. " 失败: " .. tostring(err), vim.log.levels.ERROR)
+    -- 检查服务器是否已配置
+    if lspconfig[server_name] then
+      -- 检查服务器是否已启动并附加到当前缓冲区
+      local clients = vim.lsp.get_clients({ name = server_name, bufnr = bufnr })
+      if #clients == 0 then
+        -- 服务器未附加到当前缓冲区，尝试附加或启动
+        local all_clients = vim.lsp.get_clients({ name = server_name })
+        if #all_clients > 0 then
+          -- 服务器已启动，附加到当前缓冲区
+          for _, client in ipairs(all_clients) do
+            if not vim.lsp.buf_is_attached(bufnr, client.id) then
+              vim.lsp.buf_attach_client(bufnr, client.id)
+            end
+          end
+          table.insert(started_servers, server_name)
+        else
+          -- 服务器未启动，使用 mason-lspconfig 自动配置
+          -- mason-lspconfig 会自动调用 lspconfig[server_name].setup()
+          -- 我们只需要等待它完成
+          table.insert(started_servers, server_name)
+        end
+      else
+        -- 服务器已附加到当前缓冲区
+        table.insert(started_servers, server_name)
+      end
     end
   end
 
-  if vim.b[bufnr].lsp_started then
-    vim.notify("LSP: " .. table.concat(server_names, ", ") .. " 已启用", vim.log.levels.INFO)
+  if #started_servers > 0 then
+    vim.b[bufnr].lsp_started = true
+    if vim.g.lsp_debug then
+      local end_time = os.date("%H:%M:%S")
+      vim.notify(
+        "LSP 语法检查完成: " .. ft .. " (" .. end_time .. ")服务器: " .. table.concat(started_servers, ", "),
+        vim.log.levels.INFO
+      )
+    end
   end
 end
 
@@ -417,6 +469,11 @@ function M.setup()
       local bufnr = args.buf
       local ft = vim.bo[bufnr].filetype
 
+      -- 跳过不需要格式化的文件类型
+      if M.skip_filetypes[ft] then
+        return
+      end
+
       -- 检查是否有对应的格式化器
       local formatters = M.formatters_by_ft[ft] or M.formatters_by_ft["*"] or {}
 
@@ -435,7 +492,7 @@ function M.setup()
             -- 如果 conform 格式化失败，尝试 LSP
             local clients = vim.lsp.get_clients({ bufnr = bufnr })
             for _, client in ipairs(clients) do
-              if client.supports_method("textDocument/formatting") then
+              if client.server_capabilities.documentFormattingProvider then
                 pcall(vim.lsp.buf.format, { async = false, bufnr = bufnr })
                 break
               end
@@ -445,7 +502,7 @@ function M.setup()
           -- 回退到 LSP 格式化
           local clients = vim.lsp.get_clients({ bufnr = bufnr })
           for _, client in ipairs(clients) do
-            if client.supports_method("textDocument/formatting") then
+            if client.server_capabilities.documentFormattingProvider then
               pcall(vim.lsp.buf.format, { async = false, bufnr = bufnr })
               break
             end
@@ -480,16 +537,72 @@ function M.setup_mason()
     },
   })
 
+  -- 配置 mason-lspconfig
+  local mason_lspconfig_ok, mason_lspconfig = pcall(require, "mason-lspconfig")
+  if mason_lspconfig_ok then
+    mason_lspconfig.setup({
+      -- 自动安装 LSP 服务器
+      automatic_installation = true,
+
+      -- 确保安装的服务器
+      ensure_installed = {
+        "lua_ls",
+        "pyright",
+        "tsserver",
+        "html",
+        "cssls",
+        "jsonls",
+        "yamlls",
+        "bashls",
+        "clangd",
+        "gopls",
+        "rust_analyzer",
+      },
+    })
+
+    -- mason-lspconfig 会自动配置 LSP 服务器
+    -- 不需要手动设置 setup_handlers
+  end
+
   -- 安装推荐的 LSP 服务器和格式化工具
   vim.defer_fn(function()
     -- 尝试获取包列表，如果获取不到就更新
     local mason_registry_ok, mason_registry = pcall(require, "mason-registry")
     if not mason_registry_ok or not mason_registry.get_package then
-      vim.cmd('MasonUpdate')
+      vim.cmd("MasonUpdate")
     end
+
+    -- 配置所有 LSP 服务器
+    M.setup_lsp_servers()
+
     M.ensure_lsp_servers()
     M.ensure_formatters()
   end, 1000)
+end
+
+function M.setup_lsp_servers()
+  -- 配置所有 LSP 服务器
+  local lspconfig_ok, lspconfig = pcall(require, "lspconfig")
+  if not lspconfig_ok then
+    vim.notify("lspconfig 插件未加载", vim.log.levels.WARN)
+    return
+  end
+
+  -- 配置每个服务器
+  for server_name, _ in pairs(M.lsp_to_mason) do
+    local config = M.server_configs[server_name] or {}
+    if lspconfig[server_name] then
+      local success, err = pcall(function()
+        lspconfig[server_name].setup(config)
+      end)
+
+      if not success then
+        vim.notify("配置 LSP " .. server_name .. " 失败: " .. tostring(err), vim.log.levels.WARN)
+      end
+    end
+  end
+
+  vim.notify("LSP 服务器配置完成", vim.log.levels.INFO)
 end
 
 function M.ensure_lsp_servers()
@@ -620,8 +733,8 @@ vim.api.nvim_create_user_command("LspStatus", function()
     print("当前缓冲区的 LSP 客户端:")
     for _, client in ipairs(clients) do
       print("  - " .. client.name)
-      print("    格式化支持: " .. tostring(client.supports_method("textDocument/formatting")))
-      print("    悬停支持: " .. tostring(client.supports_method("textDocument/hover")))
+      print("    格式化支持: " .. tostring(client.server_capabilities.documentFormattingProvider))
+      print("    悬停支持: " .. tostring(client.server_capabilities.hoverProvider))
     end
   end
 
@@ -651,6 +764,15 @@ vim.api.nvim_create_user_command("LspStatus", function()
     end
   end
 end, { desc = "显示 LSP 状态" })
+
+vim.api.nvim_create_user_command("LspDebug", function()
+  vim.g.lsp_debug = not vim.g.lsp_debug
+  if vim.g.lsp_debug then
+    vim.notify("LSP 调试模式已启用", vim.log.levels.INFO)
+  else
+    vim.notify("LSP 调试模式已禁用", vim.log.levels.INFO)
+  end
+end, { desc = "切换 LSP 调试模式" })
 
 vim.api.nvim_create_user_command("LspListServers", function()
   -- 列出所有可用的 LSP 服务器

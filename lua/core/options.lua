@@ -11,7 +11,7 @@ opt.termguicolors = true -- 真彩色支持
 opt.expandtab = true -- Tab转空格
 opt.tabstop = 4 -- Tab宽度
 opt.shiftwidth = 4 -- 自动缩进宽度
--- opt.smartindent = true     -- 智能缩进
+opt.smartindent = true -- 智能缩进
 opt.wrap = false -- 不自动换行
 
 -- 搜索
@@ -71,3 +71,9 @@ opt.formatoptions:append("j") -- 在合适的地方删除注释前缀
 -- 禁用写入备份提示
 opt.writebackup = false
 opt.backup = false
+
+-- 拼写检查（通过 core.spell 模块配置）
+-- opt.spell = true -- 启用拼写检查
+-- opt.spelllang = "en_us" -- 设置拼写语言为美式英语
+-- opt.spellsuggest = "best" -- 拼写建议模式
+-- opt.spelloptions = "camel" -- 识别驼峰命名

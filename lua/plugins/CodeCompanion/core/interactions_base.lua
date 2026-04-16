@@ -28,7 +28,9 @@ local function get_base_system_prompt()
 
   请根据任务需求自主选择合适的工具，无需等待用户指定。
   若有需要用户决定或操作时等待用户操作
-  尽量优先使用原来的函数名称和文件结构]]
+  尽量优先使用原来的函数名称和文件结构
+  测试让用户来做
+  查找优先search text不要用正则表达式，不要使用转义符]]
   return str:gsub("%s+", " ")
 end
 
@@ -256,7 +258,7 @@ M.config = {
         desc = "读取文件内容",
         opts = {
           require_approval_before = false, -- 执行前需用户审批
-          require_cmd_approval = true,     -- 命令本身需经批准
+          require_cmd_approval = true, -- 命令本身需经批准
         },
       },
       ["grep_search"] = {
@@ -265,7 +267,7 @@ M.config = {
         opts = {
           respect_gitignore = true,
           require_approval_before = false, -- 执行前需用户审批
-          require_cmd_approval = true,     -- 命令本身需经批准
+          require_cmd_approval = true, -- 命令本身需经批准
         },
       },
       ["list_code_usages"] = {
@@ -286,13 +288,13 @@ M.config = {
         description = "插入或编辑文件内容",
         desc = "插入或编辑文件内容",
         opts = {
-          require_approval_before = {        -- 审批配置
-            buffer = false,                  -- 编辑 Neovim 缓冲区前不需审批
-            file = false,                    -- 编辑工作目录文件前不需审批
+          require_approval_before = { -- 审批配置
+            buffer = false, -- 编辑 Neovim 缓冲区前不需审批
+            file = false, -- 编辑工作目录文件前不需审批
           },
           require_confirmation_after = true, -- 编辑后需用户确认才接受更改
-          auto_accept_changes = false,       -- 不自动接受更改
-          file_size_limit_mb = 2,            -- 文件大小限制（超过此值可能影响操作）
+          auto_accept_changes = false, -- 不自动接受更改
+          file_size_limit_mb = 2, -- 文件大小限制（超过此值可能影响操作）
         },
       },
       ["create_file"] = {
@@ -300,7 +302,7 @@ M.config = {
         desc = "创建新文件",
         opts = {
           require_approval_before = false, -- 执行前需用户审批
-          require_cmd_approval = true,     -- 命令本身需经批准
+          require_cmd_approval = true, -- 命令本身需经批准
         },
       },
       ["delete_file"] = {
@@ -308,8 +310,8 @@ M.config = {
         desc = "删除文件",
         opts = {
           require_approval_before = true, -- 执行前需用户审批
-          require_cmd_approval = false,   -- 命令本身需经批准
-          allowed_in_yolo_mode = false,   -- 不允许在"yolo模式"下执行
+          require_cmd_approval = false, -- 命令本身需经批准
+          allowed_in_yolo_mode = false, -- 不允许在"yolo模式"下执行
         },
       },
       ["cmd_runner"] = {
@@ -331,13 +333,13 @@ M.config = {
 
       opts = {
         -- 工具执行选项配置
-        auto_submit_success = true,      -- 工具执行成功时自动提交结果
-        auto_submit_errors = true,       -- 工具执行出错时自动提交错误
-        auto_tool_selection = true,      -- 自动选择工具（根据用户请求）
+        auto_submit_success = true, -- 工具执行成功时自动提交结果
+        auto_submit_errors = true, -- 工具执行出错时自动提交错误
+        auto_tool_selection = true, -- 自动选择工具（根据用户请求）
         require_approval_before = false, -- 工具执行前不需要用户批准
         default_tools = {
-          "files",                       -- 文件操作工具组：包含 read_file, create_file, delete_file, insert_edit_into_file
-          "cmd_runner",                  -- 命令行执行工具：用于执行 shell 命令
+          "files", -- 文件操作工具组：包含 read_file, create_file, delete_file, insert_edit_into_file
+          "cmd_runner", -- 命令行执行工具：用于执行 shell 命令
           -- "memory",
           -- MCP 工具将由 MCP Hub 动态添加
         },
@@ -374,7 +376,7 @@ M.config = {
   inline = {
     adapter = {
       name = "deepseek",
-      model = "deepseek-code"
+      model = "deepseek-code",
     },
 
     keymaps = require("core.keymaps").codecompanion().inline(),
@@ -389,14 +391,14 @@ M.config = {
   cmd = {
     adapter = {
       name = "step",
-      model = "step-3.5-flash"
+      model = "step-3.5-flash",
     },
   },
 
   background = {
     adapter = {
       name = "deepseek",
-      model = "deepseek-chat"
+      model = "deepseek-chat",
     },
     enabled = true,
   },

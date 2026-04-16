@@ -33,7 +33,7 @@ vim.pack.add({
   gh("akinsho/bufferline.nvim"),
   gh("folke/noice.nvim"),
   gh("rcarriga/nvim-notify"),
-    -- 编辑增强
+  -- 编辑增强
   gh("nvim-treesitter/nvim-treesitter"),
   gh("windwp/nvim-autopairs"),
   gh("numToStr/Comment.nvim"),
@@ -57,8 +57,33 @@ require("core.options")
 require("core.keymaps")
 require("core.autocommands")
 
+-- 加载自动拼写纠正模块
+local spell_ok, spell = pcall(require, "core.spell")
+if spell_ok then
+  spell.setup({
+    enabled = true,
+    languages = { "en_us" },
+    auto_correct_on_tab = true,  -- 按 Tab 时自动纠正
+    camel_case = true,
+    max_suggestions = 5,
+    
+    -- 文件类型配置
+    enable_for = { "markdown", "text", "gitcommit", "latex", "tex", "rst" },
+    disable_for = { "lua", "python", "javascript", "typescript", "java", "cpp", "c", "go", "rust" },
+  })
+else
+  -- 如果拼写模块加载失败，使用基本设置
+  vim.opt.spelllang = "en_us"
+  vim.opt.spellsuggest = "best"
+  vim.opt.spelloptions = "camel"
+end
+
 -- 加载LSP配置
 require("lsp").setup()
+
+-- 加载虚拟环境模块
+require("core.python_venv").setup()
+require("core.nvm_venv").setup()
 
 require("plugins-manager").setup({
   -- 4. 加载插件配置
