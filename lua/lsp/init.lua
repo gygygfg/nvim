@@ -443,10 +443,10 @@ local function setup_global_keymaps()
   -- vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action)
   -- vim.keymap.set("n", "gh", vim.lsp.buf.hover)
   vim.keymap.set("n", "g[", function()
-    vim.diagnostic.goto_prev({ severity = vim.diagnostic.severity.ERROR })
+    vim.diagnostic.goto_prev({ severity = { min = vim.diagnostic.severity.ERROR } })
   end)
   vim.keymap.set("n", "g]", function()
-    vim.diagnostic.goto_next({ severity = vim.diagnostic.severity.ERROR })
+    vim.diagnostic.goto_next({ severity = { min = vim.diagnostic.severity.ERROR } })
   end)
   vim.keymap.set("n", "go", function()
     vim.diagnostic.open_float()
@@ -938,8 +938,10 @@ local function cleanup_duplicate_copilot_processes()
   local all_clients = vim.lsp.get_clients()
   for _, client in ipairs(all_clients) do
     if client.name == "copilot" or client.name:find("copilot") then
-      if client.rpc and client.rpc.pid then
-        active_pids[client.rpc.pid] = true
+      -- 检查 client.rpc.pid
+      local pid = client.rpc and client.rpc.pid
+      if pid then
+        active_pids[pid] = true
       end
     end
   end
@@ -1228,7 +1230,7 @@ local function get_all_lsp_processes()
   if handle then
     for line in handle:lines() do
       local pid = line:match("^%s*(%d+)")
-      local cmd = line:match("%S+%s+%S+%s+%S+%s+%S+%s+%S+%s+%S+%s+%S+%s+%S+%s+(.+)")
+      local cmd_line = line:match("%S+%s+%S+%s+%S+%s+%S+%s+%S+%s+%S+%s+%S+%s+%S+%s+(.+)")
 
       if pid and cmd then
         local pid_num = tonumber(pid)
@@ -1335,8 +1337,10 @@ local function cleanup_zombie_processes()
 
   -- 收集活跃客户端的 PID
   for _, client in ipairs(active_clients) do
-    if client.rpc and client.rpc.pid then
-      active_pids[client.rpc.pid] = true
+    -- 检查 client.rpc.pid
+    local pid = client.rpc and client.rpc.pid
+    if pid then
+      active_pids[pid] = true
     end
   end
 
@@ -1518,14 +1522,16 @@ local function setup_process_monitoring()
   -- 设置自动清理定时器（每30分钟）
   vim.defer_fn(function()
     local timer = vim.loop.new_timer()
-    timer:start(1800000, 1800000, function() -- 30分钟间隔
-      vim.schedule(function()
-        if vim.g.lsp_debug then
-          vim.notify("[LSP] 执行定期进程清理...", vim.log.levels.INFO)
-        end
-        cleanup_zombie_processes()
+    if timer then
+      timer:start(1800000, 1800000, function() -- 30分钟间隔
+        vim.schedule(function()
+          if vim.g.lsp_debug then
+            vim.notify("[LSP] 执行定期进程清理...", vim.log.levels.INFO)
+          end
+          cleanup_zombie_processes()
+        end)
       end)
-    end)
+    end
   end, 60000) -- 1分钟后启动定时器
 
   vim.notify("[LSP] LSP 进程监控已启动", vim.log.levels.INFO)
@@ -1717,9 +1723,21 @@ local function start_lsp_for_filetype(ft, bufnr)
       for _, client in ipairs(all_clients) do
         -- 检查文件类型是否匹配
         local should_attach = true
-        local filetypes = client.config
-          and (client.config.filetypes or (client.config.init_options and client.config.init_options.filetypes))
-        if filetypes then
+        local filetypes = nil
+        if client.config then
+          -- 安全地访问 filetypes 字段
+          local config = client.config
+          if config.filetypes and type(config.filetypes) == "table" then
+            filetypes = config.filetypes
+          elseif
+            config.init_options
+            and config.init_options.filetypes
+            and type(config.init_options.filetypes) == "table"
+          then
+            filetypes = config.init_options.filetypes
+          end
+        end
+        if filetypes and type(filetypes) == "table" then
           for _, client_ft in ipairs(filetypes) do
             if client_ft == ft then
               should_attach = true
@@ -2565,15 +2583,25 @@ vim.api.nvim_create_user_command("LspClients", function()
   for _, client in ipairs(buf_clients) do
     vim.notify("[LSP]   " .. client.name .. " (ID: " .. client.id .. ")")
     vim.notify("[LSP]     配置文件: " .. (client.config and "是" or "否"))
-    vim.notify(
-      "    文件类型: "
-        .. (
-          client.config
-            and (client.config.filetypes or (client.config.init_options and client.config.init_options.filetypes))
-            and table.concat(client.config.filetypes or client.config.init_options.filetypes, ", ")
-          or "未知"
-        )
-    )
+    -- 获取文件类型
+    local filetypes_str = "未知"
+    if client.config then
+      local filetypes = nil
+      if client.config.filetypes and type(client.config.filetypes) == "table" then
+        filetypes = client.config.filetypes
+      elseif
+        client.config.init_options
+        and client.config.init_options.filetypes
+        and type(client.config.init_options.filetypes) == "table"
+      then
+        filetypes = client.config.init_options.filetypes
+      end
+
+      if filetypes and type(filetypes) == "table" then
+        filetypes_str = table.concat(filetypes, ", ")
+      end
+    end
+    vim.notify("    文件类型: " .. filetypes_str)
     vim.notify("[LSP]     根目录: " .. (client.config and client.config.root_dir or "无"))
   end
 
@@ -2789,9 +2817,14 @@ vim.api.nvim_create_user_command("LuaLSStatus", function()
     -- 检查配置
     if client.config and client.config.settings then
       vim.notify("[LSP] 配置已加载: 是")
-      if client.config.settings.Lua and client.config.settings.Lua.diagnostics then
+      if
+        client.config.settings
+        and client.config.settings.Lua
+        and client.config.settings.Lua.diagnostics
+        and type(client.config.settings.Lua.diagnostics) == "table"
+      then
         local globals = client.config.settings.Lua.diagnostics.globals
-        if globals then
+        if type(globals) == "table" then
           vim.notify("[LSP] 定义的全局变量: " .. table.concat(globals, ", "))
         else
           vim.notify("[LSP] 定义的全局变量: 无")
@@ -2960,17 +2993,29 @@ vim.api.nvim_create_user_command("LspTestFiletype", function()
     vim.notify("[LSP]   " .. client.name .. " (ID: " .. client.id .. ")")
 
     -- 检查文件类型配置
-    local filetypes = client.config
-      and (client.config.filetypes or (client.config.init_options and client.config.init_options.filetypes))
-    if filetypes then
+    local filetypes = nil
+    if client.config then
+      if client.config.filetypes and type(client.config.filetypes) == "table" then
+        filetypes = client.config.filetypes
+      elseif
+        client.config.init_options
+        and client.config.init_options.filetypes
+        and type(client.config.init_options.filetypes) == "table"
+      then
+        filetypes = client.config.init_options.filetypes
+      end
+    end
+    if filetypes and type(filetypes) == "table" then
       vim.notify("[LSP]     配置文件类型: " .. table.concat(filetypes, ", "))
 
       -- 检查是否匹配当前文件类型
       local matches = false
-      for _, client_ft in ipairs(filetypes) do
-        if client_ft == ft then
-          matches = true
-          break
+      if type(filetypes) == "table" then
+        for _, client_ft in ipairs(filetypes) do
+          if client_ft == ft then
+            matches = true
+            break
+          end
         end
       end
 
@@ -3028,7 +3073,12 @@ vim.api.nvim_create_user_command("LspQuickFix", function()
     if client.config and client.config.settings then
       if client.name == "lua_ls" and client.config.settings.Lua then
         -- 检查是否有我们配置的全局变量
-        if client.config.settings.Lua.diagnostics and client.config.settings.Lua.diagnostics.globals then
+        if
+          client.config.settings.Lua
+          and client.config.settings.Lua.diagnostics
+          and client.config.settings.Lua.diagnostics.globals
+          and type(client.config.settings.Lua.diagnostics.globals) == "table"
+        then
           is_default_config = false
         end
       elseif client.config.settings then
@@ -3092,7 +3142,7 @@ vim.api.nvim_create_user_command("LspFixNow", function()
           if not vim.lsp.buf_is_attached(bufnr, client.id) then
             -- 检查文件类型是否匹配
             local should_attach = true
-            if client.config and client.config.filetypes then
+            if client.config and client.config.filetypes and type(client.config.filetypes) == "table" then
               should_attach = false
               for _, client_ft in ipairs(client.config.filetypes) do
                 if client_ft == ft then
@@ -3160,10 +3210,10 @@ function M.start_server_with_config(server_name, bufnr)
       name = server_name,
       cmd = cmd,
       settings = config.settings or {},
-      on_attach = config.on_attach or function(client, bufnr)
+      on_attach = config.on_attach or function(client, attached_bufnr)
         -- 默认的 on_attach 函数
         if client.server_capabilities.documentFormattingProvider then
-          vim.bo[bufnr].formatexpr = "v:lua.vim.lsp.formatexpr()"
+          vim.bo[attached_bufnr].formatexpr = "v:lua.vim.lsp.formatexpr()"
         end
 
         -- 设置缓冲区本地按键映射
@@ -3645,8 +3695,10 @@ vim.api.nvim_create_user_command("LspProcessStatus", function()
   local active_clients = vim.lsp.get_clients()
   local active_pids = {}
   for _, client in ipairs(active_clients) do
-    if client.rpc and client.rpc.pid then
-      active_pids[client.rpc.pid] = true
+    -- 检查 client.rpc.pid
+    local pid = client.rpc and client.rpc.pid
+    if pid then
+      active_pids[pid] = true
     end
   end
 
