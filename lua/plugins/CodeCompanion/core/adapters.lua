@@ -19,22 +19,22 @@ M.config = {
               ["deepseek-chat"] = {
                 nice_name = "DeepSeek Chat",
                 opts = {
-                  max_tokens = 8192
+                  max_tokens = 8192,
                 },
               },
               ["deepseek-reasoner"] = {
                 nice_name = "DeepSeek Reasoner",
                 opts = {
                   can_reason = true,
-                  max_tokens = 32768
+                  max_tokens = 32768,
                 },
               },
               ["deepseek-code"] = {
                 nice_name = "DeepSeek Coder",
                 opts = {
-                  max_tokens = 8192
+                  max_tokens = 8192,
                 },
-              }
+              },
             },
           },
           temperature = { default = 0.2 },
@@ -76,7 +76,7 @@ M.config = {
     opencode = function()
       return require("codecompanion.adapters").extend("opencode", {
         commands = {
-          default = { "opencode", "acp" }
+          default = { "opencode", "acp" },
         },
       })
     end,

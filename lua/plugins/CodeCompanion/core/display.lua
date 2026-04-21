@@ -1,49 +1,42 @@
--- CodeCompanion 显示配置
--- 文件: CodeCompanion/display.lua
-
 local M = {}
 
 M.config = {
-  display = {
-    diff = {
-      enabled = true,
-
-      -- At or below this diff size, always display the diff in the chat buffer
-      threshold_for_chat = 6,
-
-      word_highlights = {
-        additions = true,
-        deletions = true,
-      },
+  -- 动作面板配置
+  action_palette = {
+    width = 95,
+    height = 10,
+    prompt = "提示 ", -- 交互式 LLM 调用使用的标题
+    opts = {
+      show_preset_actions = true,
+      show_preset_prompts = true,
+      show_preset_rules = true,
+      title = "CodeCompanion 动作",
     },
   },
+
+  -- 聊天显示配置
   chat = {
-    -- 窗口配置：设置为悬浮窗布局
+    icons = {
+      buffer_sync_all = "󰪴 ",
+      buffer_sync_diff = " ",
+      chat_fold = " ",
+      tool_pending = "  ",
+      tool_in_progress = "  ",
+      tool_failure = "  ",
+      tool_success = "  ",
+    },
+
+    -- 聊天缓冲区的窗口选项
     window = {
-      -- layout = "float",    -- 悬浮窗布局
-      -- width = 1.0,         -- 占编辑器宽度的100%
-      -- height = 0.8,        -- 占编辑器高度的80%
-      -- relative = "editor", -- 相对于编辑器窗口
-      -- border = "rounded",  -- 圆角边框，更美观
-      buflisted = true,   -- 設置為 true，讓聊天緩衝區出現在緩衝區列表中
-      sticky = false,     -- 可選：控制切換標籤頁時聊天窗口是否保持打開
-      layout = "buffer",  -- float|vertical|horizontal|buffer 聊天窗口的佈局方式
-
+      buflisted = true, -- 在缓冲区列表中列出聊天缓冲区？
+      sticky = false, -- 切换标签页时聊天窗口跟随
+      layout = "tab", -- float|vertical|horizontal|tab|buffer
       full_height = true, -- 垂直布局时使用完整高度
-      position = nil,     -- left|right|top|bottom (nil 将根据 vim.opt.splitright|vim.opt.splitbelow 默认设置)
-
-      width = 1.0, ---@return number|fun(): number
-      height = 1.0, ---@return number|fun(): number
+      position = nil, -- left|right|top|bottom (nil 将根据 vim.opt.splitright|vim.opt.splitbelow 默认设置)
+      width = 0.5, ---@return number|fun(): number
+      height = 0.8, ---@return number|fun(): number
       border = "single",
       relative = "editor",
-
-
-
-      -- 注意：根据源码，当 layout = "float" 时，
-      -- 如果不指定 row 和 col，窗口会自动居中
-      -- 所以我们移除 row 和 col 配置，让系统自动计算居中位置
-
-      -- 窗口选项
       opts = {
         breakindent = true,
         linebreak = true,
@@ -51,49 +44,119 @@ M.config = {
       },
     },
 
-    -- 修改 diff 配置以支持简化操作
-    diff = {
-      enabled = true,
-      provider = "inline",
-      provider_opts = {
-        inline = {
-          layout = "float",
-          opts = {
-            context_lines = 3,
-            -- 移除复杂的按键提示，只显示简化提示
-            show_keymap_hints = false, -- 改为 false
-            -- 自定义简化提示
-            custom_prompt = "按回车确认所有更改",
-          },
-        },
-      },
+    -- 浮动窗口选项
+    floating_window = {
+      width = 0.9, ---@return number|fun(): number
+      height = 0.8, ---@return number|fun(): number
+      border = "single",
+      relative = "editor",
+      opts = {},
     },
 
-    ui = {
-      show_roles = true,
-      show_timestamps = false,
-      completion = {
-        enabled = true,
-        source = "cmp",
-      },
-    },
-    fold_context = true, -- 上下文可以折叠
-    fold_reasoning = true, -- 折叠推理过程
-    show_reasoning = false, -- 显示推理过程
+    -- 聊天缓冲区选项 --------------------------------------------------
+    auto_scroll = true, -- 自动向下滚动并将光标放在末尾？
+    intro_message = "欢迎使用 CodeCompanion ✨！按 ? 查看选项",
     separator = "─", -- 聊天缓冲区中不同消息之间的分隔符
-    show_context = true, -- 在聊天缓冲区显示上下文（来自斜杠命令和变量）？
-    show_header_separator = false, -- 在聊天缓冲区显示标题分隔线？如果使用外部 Markdown 格式化插件，请将此设置为 false
+    show_header_separator = false, -- 在聊天缓冲区显示标题分隔线？如果使用外部 markdown 格式化插件，请将此设置为 false
+    fold_context = true, -- 在聊天缓冲区中折叠上下文？
+    show_context = true, -- 在聊天缓冲区显示与 LLM 共享的上下文？
+    fold_reasoning = true, -- 在聊天缓冲区中折叠推理内容？
+    show_reasoning = true, -- 在聊天缓冲区显示推理内容？
     show_settings = false, -- 在聊天缓冲区顶部显示 LLM 设置？
     show_token_count = true, -- 显示每条回复的令牌数量？
-    show_tools_processing = false, -- 工具执行时显示加载信息？
-    start_in_insert_mode = true, -- 打开聊天缓冲区时进入插入模式？
+    show_tools_processing = true, -- 工具执行时显示加载信息？
+    start_in_insert_mode = false, -- 在插入模式下打开聊天缓冲区？
+
+    ---显示令牌计数的函数
+    ---@param tokens number
+    ---@param adapter CodeCompanion.HTTPAdapter|CodeCompanion.ACPAdapter
+    ---@return string
+    token_count = function(tokens, adapter)
+      return " (" .. tokens .. " 令牌)"
+    end,
   },
 
-  -- 工作流显示配置
-  workflows = {
-    show_progress = true,
-    confirm_before_execution = true,
-    show_tool_calls = true,
+  -- CLI 显示配置
+  cli = {
+    window = {
+      opts = {
+        list = false, -- 没有这个，listchars 会渲染为 "."
+      },
+    },
+  },
+
+  -- 差异显示配置
+  diff = {
+    enabled = true,
+    threshold_for_chat = 6, -- 等于或低于此值时，始终在聊天缓冲区显示差异
+    window = {
+      opts = {},
+    },
+    word_highlights = {
+      additions = true,
+      deletions = true,
+    },
+  },
+
+  -- 图标配置
+  icons = {
+    warning = " ",
+  },
+
+  -- 内联显示配置
+  inline = {
+    layout = "vertical", -- vertical|horizontal|buffer
+  },
+
+  -- 输入缓冲区显示选项
+  input = {
+    title = "󰅂 CodeCompanion 提示",
+    window = {
+      border = "single",
+      width = { min = 40, max = 60 },
+      height = { min = 3, max = 5 },
+      relative = "cursor",
+      title_pos = "left",
+      row = 1,
+      col = 0,
+      opts = {
+        number = false,
+        relativenumber = false,
+        signcolumn = "no",
+        foldcolumn = "0",
+        statuscolumn = "",
+        breakindent = true,
+        linebreak = true,
+        wrap = true,
+      },
+    },
+    keymaps = {
+      send = {
+        modes = {
+          n = { "<CR>", "<C-s>" },
+          i = "<C-s>",
+        },
+        description = "发送",
+      },
+      close = {
+        modes = { n = { "q", "<Esc>" } },
+        description = "关闭",
+      },
+      history_up = {
+        modes = {
+          i = "<Up>",
+          n = "<Up>",
+        },
+        description = "上一个提示",
+      },
+      history_down = {
+        modes = {
+          i = "<Down>",
+          n = "<Down>",
+        },
+        description = "下一个提示",
+      },
+    },
   },
 }
 

@@ -37,7 +37,7 @@ run_mcphub_build()
 -- 延迟加载 CodeCompanion 及其配置
 vim.defer_fn(function()
   -- 确保 opt 插件被加载
-  vim.cmd('packadd codecompanion.nvim')
+  vim.cmd("packadd codecompanion.nvim")
 
   local ok, codecompanion = pcall(require, "codecompanion")
   if not ok then
@@ -49,6 +49,7 @@ vim.defer_fn(function()
   local adapters = require("plugins.CodeCompanion.core.adapters")
   local interactions_with_mcp = require("plugins.CodeCompanion.mcp.interactions_with_mcp")
   local display = require("plugins.CodeCompanion.core.display")
+  local mcp = require("plugins.CodeCompanion.mcp.mcp")
 
   -- 构建配置表
   local config = {
@@ -60,6 +61,16 @@ vim.defer_fn(function()
 
     -- ==================== 交互策略配置 ====================
     interactions = interactions_with_mcp.config,
+
+    -- ==================== MCP 服务器配置 ====================
+    mcp = {
+      servers = mcp.servers,
+      opts = {
+        default_servers = {}, -- 自动启动并添加到聊天的服务器名称列表
+        acp_enabled = true, -- 为 ACP 适配器启用 MCP 服务器？
+        timeout = 30e3, -- MCP 服务器响应超时时间（毫秒）
+      },
+    },
 
     -- ==================== 显示配置 ====================
     display = display.config,

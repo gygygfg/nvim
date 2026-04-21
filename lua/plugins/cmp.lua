@@ -19,7 +19,8 @@ local function _cmp_setup()
   local spell_ok, spell = pcall(require, "core.spell")
   if spell_ok then
     spell.setup({
-      auto_correct_on_tab = true,
+      enabled = false, -- 禁用拼写纠正
+      auto_correct_on_tab = false, -- 禁用按 Tab 时自动纠正
     })
   end
 
@@ -51,13 +52,6 @@ local function _cmp_setup()
           end
           local line, col = unpack(vim.api.nvim_win_get_cursor(0))
           return col ~= 0 and vim.api.nvim_buf_get_text(0, line - 1, 0, line - 1, col, {})[1]:match("^%s*$") == nil
-        end
-
-        -- 自动拼写纠正：如果光标在拼写错误的单词上，按 Tab 会自动纠正
-        if spell_ok then
-          if spell.smart_tab_handler() then
-            return
-          end
         end
 
         if cmp.visible() then

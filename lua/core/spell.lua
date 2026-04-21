@@ -4,9 +4,9 @@ local M = {}
 
 -- 默认配置
 local default_config = {
-  enabled = true,
+  enabled = false,  -- 禁用拼写纠正
   languages = { "en_us" },
-  auto_correct_on_tab = true,  -- 按 Tab 时自动纠正
+  auto_correct_on_tab = false,  -- 禁用按 Tab 时自动纠正
   camel_case = true,
   max_suggestions = 5,
   

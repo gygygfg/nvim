@@ -6,7 +6,6 @@ local M = {}
 
 -- 导入基础配置
 local base_config = require("plugins.CodeCompanion.core.interactions_base").config
-
 -- 导入动态 MCP 工具配置
 local mcp_config = require("plugins.CodeCompanion.config.mcp_tools_config")
 local mcp_tools_config = mcp_config.get_tools_config()
@@ -19,15 +18,16 @@ local context_manager = require("plugins.CodeCompanion.config.context_manager")
 
 -- 辅助函数：从文本中提取指定章节
 local function extract_section(text, start_marker, end_marker)
-  if not text or not start_marker then
+  -- 先检查 text 是否为 nil 或者不是字符串
+  if not text or type(text) ~= "string" or not start_marker then
     return nil
   end
-
+  
   local start_pos = string.find(text, start_marker, 1, true)
   if not start_pos then
     return nil
   end
-
+  
   local end_pos
   if end_marker then
     end_pos = string.find(text, end_marker, start_pos + 1, true)
@@ -125,17 +125,32 @@ local function deep_merge_configs(base, mcp)
 
   -- 4. 智能合并系统提示（避免重复）
   if mcp.system_prompt then
-    -- 获取基础系统提示
+    -- 获取基础系统提示，确保是字符串
     local base_prompt = merged.chat.tools.opts.system_prompt.prompt or ""
+    
+    -- 确保 base_prompt 是字符串类型
+    if type(base_prompt) == "function" then
+      base_prompt = base_prompt()
+    end
+    
+    -- 获取 MCP 系统提示，确保是字符串
+    local mcp_prompt = mcp.system_prompt
+    if type(mcp_prompt) == "function" then
+      mcp_prompt = mcp_prompt()
+    end
+    
+    -- 确保两个提示都是字符串类型
+    if type(base_prompt) ~= "string" then
+      base_prompt = tostring(base_prompt or "")
+    end
+    
+    if type(mcp_prompt) ~= "string" then
+      mcp_prompt = tostring(mcp_prompt or "")
+    end
 
     -- 分析两个提示的内容，避免重复
-    local mcp_prompt = mcp.system_prompt
-
-    -- 检查基础提示中是否已包含 MCP 工具列表
     local has_mcp_tools_in_base = string.find(base_prompt, "## MCP 工具", 1, true)
     local has_crawl4ai_guide_in_base = string.find(base_prompt, "## crawl4ai 网页爬取工具使用指南", 1, true)
-
-    -- 检查基础提示中是否已包含自主决策指南
     local has_decision_guide_in_base = string.find(base_prompt, "## 自主决策指南", 1, true)
 
     -- 构建最终提示
@@ -168,11 +183,11 @@ local function deep_merge_configs(base, mcp)
     end
 
     -- 如果基础提示中没有 MCP 工具部分，则添加
-    local has_mcp_tools_in_base = string.find(base_prompt, "## MCP 工具", 1, true)
-    if not has_mcp_tools_in_base then
-      local mcp_tools_section = extract_section(mcp_prompt, "## MCP 工具", "## MCP 服务器")
-      if mcp_tools_section then
-        final_prompt = final_prompt .. "\n\n" .. mcp_tools_section
+    local has_mcp_tools_in_base2 = string.find(base_prompt, "## MCP 工具", 1, true)
+    if not has_mcp_tools_in_base2 then
+      local mcp_tools_section2 = extract_section(mcp_prompt, "## MCP 工具", "## MCP 服务器")
+      if mcp_tools_section2 then
+        final_prompt = final_prompt .. "\n\n" .. mcp_tools_section2
       end
     end
 
