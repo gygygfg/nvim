@@ -389,6 +389,25 @@ local function setup_conform()
   vim.notify("[LSP] conform.nvim 已配置")
 end
 
+local function default_on_attach(client, bufnr)
+  -- 默认的 on_attach 函数
+  if client.server_capabilities.documentFormattingProvider then
+    vim.bo[bufnr].formatexpr = "v:lua.vim.lsp.formatexpr()"
+  end
+
+  -- 设置缓冲区本地按键映射
+  local bufopts = { noremap = true, silent = true, buffer = bufnr }
+  vim.keymap.set("n", "gD", vim.lsp.buf.declaration, bufopts)
+  vim.keymap.set("n", "K", vim.lsp.buf.hover, bufopts)
+  vim.keymap.set("n", "<C-k>", vim.lsp.buf.signature_help, bufopts)
+  vim.keymap.set("n", "<leader>wa", vim.lsp.buf.add_workspace_folder, bufopts)
+  vim.keymap.set("n", "<leader>wr", vim.lsp.buf.remove_workspace_folder, bufopts)
+  vim.keymap.set("n", "<leader>wl", function()
+    vim.notify(vim.inspect(vim.lsp.buf.list_workspace_folders()))
+  end, bufopts)
+  vim.keymap.set("n", "<leader>D", vim.lsp.buf.type_definition, bufopts)
+end
+
 local function setup_global_keymaps()
   -- 设置全局按键映射
   vim.keymap.set("n", "gK", function()
@@ -443,10 +462,10 @@ local function setup_global_keymaps()
   -- vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action)
   -- vim.keymap.set("n", "gh", vim.lsp.buf.hover)
   vim.keymap.set("n", "g[", function()
-    vim.diagnostic.goto_prev({ severity = { min = vim.diagnostic.severity.ERROR } })
+    vim.diagnostic.jump({ count = -1, severity_limit = vim.diagnostic.severity.WARN })
   end)
   vim.keymap.set("n", "g]", function()
-    vim.diagnostic.goto_next({ severity = { min = vim.diagnostic.severity.ERROR } })
+    vim.diagnostic.jump({ count = 1, severity_limit = vim.diagnostic.severity.WARN })
   end)
   vim.keymap.set("n", "go", function()
     vim.diagnostic.open_float()
@@ -710,6 +729,10 @@ local function apply_memory_limits_to_config(config, server_name)
     limited_config.settings.Lua.diagnostics.workspaceRate = 30 -- 降低诊断频率
     limited_config.settings.Lua.diagnostics.workspaceDelay = 1500 -- 增加延迟
 
+    -- 禁用代码风格检查（避免格式化器与 lua_ls 风格检查冲突）
+    limited_config.settings.Lua.diagnostics.disable = limited_config.settings.Lua.diagnostics.disable or {}
+    table.insert(limited_config.settings.Lua.diagnostics.disable, "codestyle-check")
+
     -- 限制最大诊断数量
     limited_config.settings.Lua.diagnostics.maxItems =
       math.min(limited_config.settings.Lua.diagnostics.maxItems or 1000, lua_max_items)
@@ -938,8 +961,9 @@ local function cleanup_duplicate_copilot_processes()
   local all_clients = vim.lsp.get_clients()
   for _, client in ipairs(all_clients) do
     if client.name == "copilot" or client.name:find("copilot") then
-      -- 检查 client.rpc.pid
-      local pid = client.rpc and client.rpc.pid
+      -- 检查 client.pid
+      ---@diagnostic disable-next-line: undefined-field
+      local pid = client.pid
       if pid then
         active_pids[pid] = true
       end
@@ -1337,8 +1361,9 @@ local function cleanup_zombie_processes()
 
   -- 收集活跃客户端的 PID
   for _, client in ipairs(active_clients) do
-    -- 检查 client.rpc.pid
-    local pid = client.rpc and client.rpc.pid
+    -- 检查 client.pid
+    ---@diagnostic disable-next-line: undefined-field
+    local pid = client.pid
     if pid then
       active_pids[pid] = true
     end
@@ -1681,6 +1706,16 @@ local function start_lsp_for_filetype(ft, bufnr)
     return
   end
 
+  -- 白名单模式：只有文件类型在 filetype_mappings 中才启动 LSP
+  -- 其余所有文件类型（如 codecompanion、neoai、NvimTree 等）都跳过
+  if not M.filetype_mappings[ft] then
+    -- 标记为已处理，避免重复检查
+    if vim.api.nvim_buf_is_valid(bufnr) then
+      vim.b[bufnr].lsp_started = true
+    end
+    return
+  end
+
   -- 避免重复启动
   if vim.b[bufnr].lsp_started then
     return
@@ -1726,9 +1761,13 @@ local function start_lsp_for_filetype(ft, bufnr)
         local filetypes = nil
         if client.config then
           -- 安全地访问 filetypes 字段
+          ---@diagnostic disable-next-line: undefined-field
           local config = client.config
-          if config.filetypes and type(config.filetypes) == "table" then
-            filetypes = config.filetypes
+          -- 尝试从不同位置获取文件类型
+          ---@diagnostic disable-next-line: undefined-field
+          local possible_filetypes = config.filetypes or (config.init_options and config.init_options.filetypes)
+          if possible_filetypes and type(possible_filetypes) == "table" then
+            filetypes = possible_filetypes
           elseif
             config.init_options
             and config.init_options.filetypes
@@ -2091,32 +2130,7 @@ function M.setup_mason()
         name = server_name,
         cmd = cmd,
         settings = config.settings or {},
-        on_attach = config.on_attach or function(client, bufnr)
-          -- 默认的 on_attach 函数
-          if client.server_capabilities.documentFormattingProvider then
-            vim.bo[bufnr].formatexpr = "v:lua.vim.lsp.formatexpr()"
-          end
-
-          -- 设置缓冲区本地按键映射
-          local bufopts = { noremap = true, silent = true, buffer = bufnr }
-          vim.keymap.set("n", "gD", vim.lsp.buf.declaration, bufopts)
-          vim.keymap.set("n", "gd", vim.lsp.buf.definition, bufopts)
-          vim.keymap.set("n", "K", vim.lsp.buf.hover, bufopts)
-          vim.keymap.set("n", "gi", vim.lsp.buf.implementation, bufopts)
-          vim.keymap.set("n", "<C-k>", vim.lsp.buf.signature_help, bufopts)
-          vim.keymap.set("n", "<leader>wa", vim.lsp.buf.add_workspace_folder, bufopts)
-          vim.keymap.set("n", "<leader>wr", vim.lsp.buf.remove_workspace_folder, bufopts)
-          vim.keymap.set("n", "<leader>wl", function()
-            vim.notify(vim.inspect(vim.lsp.buf.list_workspace_folders()))
-          end, bufopts)
-          vim.keymap.set("n", "<leader>D", vim.lsp.buf.type_definition, bufopts)
-          vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, bufopts)
-          vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, bufopts)
-          vim.keymap.set("n", "gr", vim.lsp.buf.references, bufopts)
-          vim.keymap.set("n", "<leader>f", function()
-            vim.lsp.buf.format({ async = true })
-          end, bufopts)
-        end,
+        on_attach = config.on_attach or default_on_attach,
         capabilities = config.capabilities or vim.lsp.protocol.make_client_capabilities(),
         root_dir = config.root_dir,
         filetypes = config.filetypes,
@@ -2343,32 +2357,7 @@ function M.reconfigure_servers()
           name = server_name,
           cmd = cmd,
           settings = config.settings or {},
-          on_attach = config.on_attach or function(client, bufnr)
-            -- 默认的 on_attach 函数
-            if client.server_capabilities.documentFormattingProvider then
-              vim.bo[bufnr].formatexpr = "v:lua.vim.lsp.formatexpr()"
-            end
-
-            -- 设置缓冲区本地按键映射
-            local bufopts = { noremap = true, silent = true, buffer = bufnr }
-            vim.keymap.set("n", "gD", vim.lsp.buf.declaration, bufopts)
-            vim.keymap.set("n", "gd", vim.lsp.buf.definition, bufopts)
-            vim.keymap.set("n", "K", vim.lsp.buf.hover, bufopts)
-            vim.keymap.set("n", "gi", vim.lsp.buf.implementation, bufopts)
-            vim.keymap.set("n", "<C-k>", vim.lsp.buf.signature_help, bufopts)
-            vim.keymap.set("n", "<leader>wa", vim.lsp.buf.add_workspace_folder, bufopts)
-            vim.keymap.set("n", "<leader>wr", vim.lsp.buf.remove_workspace_folder, bufopts)
-            vim.keymap.set("n", "<leader>wl", function()
-              vim.notify(vim.inspect(vim.lsp.buf.list_workspace_folders()))
-            end, bufopts)
-            vim.keymap.set("n", "<leader>D", vim.lsp.buf.type_definition, bufopts)
-            vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, bufopts)
-            vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, bufopts)
-            vim.keymap.set("n", "gr", vim.lsp.buf.references, bufopts)
-            vim.keymap.set("n", "<leader>f", function()
-              vim.lsp.buf.format({ async = true })
-            end, bufopts)
-          end,
+          on_attach = config.on_attach or default_on_attach,
           capabilities = config.capabilities or vim.lsp.protocol.make_client_capabilities(),
           root_dir = config.root_dir,
           filetypes = config.filetypes,
@@ -2479,7 +2468,7 @@ vim.api.nvim_create_user_command("LspInstallMissing", function()
   -- 安装缺失的 LSP 服务器
   local mason_registry_ok, mason_registry = pcall(require, "mason-registry")
   if not mason_registry_ok then
-    vim.notify("[LSP] 无法访问 Mason 注册表", vim.log.levels.ERROR)
+    print("无法访问 Mason 注册表", vim.log.levels.ERROR)
     return
   end
 
@@ -2488,15 +2477,15 @@ vim.api.nvim_create_user_command("LspInstallMissing", function()
     local ok, pkg = pcall(mason_registry.get_package, mason_name)
     if ok and not pkg:is_installed() then
       pkg:install()
-      vim.notify("[LSP] 正在安装: " .. mason_name, vim.log.levels.INFO)
+      print("正在安装: " .. mason_name, vim.log.levels.INFO)
       installed = installed + 1
     end
   end
 
   if installed > 0 then
-    vim.notify("[LSP] 已开始安装 " .. installed .. " 个 LSP 服务器", vim.log.levels.INFO)
+    print("已开始安装 " .. installed .. " 个 LSP 服务器", vim.log.levels.INFO)
   else
-    vim.notify("[LSP] 所有 LSP 服务器已安装", vim.log.levels.INFO)
+    print("所有 LSP 服务器已安装", vim.log.levels.INFO)
   end
 end, { desc = "安装缺失的 LSP 服务器" })
 
@@ -2504,7 +2493,7 @@ vim.api.nvim_create_user_command("FormatterInstallMissing", function()
   -- 安装缺失的格式化工具
   local mason_registry_ok, mason_registry = pcall(require, "mason-registry")
   if not mason_registry_ok then
-    vim.notify("[LSP] 无法访问 Mason 注册表", vim.log.levels.ERROR)
+    print("无法访问 Mason 注册表", vim.log.levels.ERROR)
     return
   end
 
@@ -2513,15 +2502,15 @@ vim.api.nvim_create_user_command("FormatterInstallMissing", function()
     local ok, pkg = pcall(mason_registry.get_package, mason_name)
     if ok and not pkg:is_installed() then
       pkg:install()
-      vim.notify("[LSP] 正在安装: " .. mason_name .. " (" .. formatter .. ")", vim.log.levels.INFO)
+      print("正在安装: " .. mason_name .. " (" .. formatter .. ")", vim.log.levels.INFO)
       installed = installed + 1
     end
   end
 
   if installed > 0 then
-    vim.notify("[LSP] 已开始安装 " .. installed .. " 个格式化工具", vim.log.levels.INFO)
+    print("已开始安装 " .. installed .. " 个格式化工具", vim.log.levels.INFO)
   else
-    vim.notify("[LSP] 所有格式化工具已安装", vim.log.levels.INFO)
+    print("所有格式化工具已安装", vim.log.levels.INFO)
   end
 end, { desc = "安装缺失的格式化工具" })
 
@@ -2530,28 +2519,28 @@ vim.api.nvim_create_user_command("LspStatus", function()
   local clients = vim.lsp.get_clients({ bufnr = bufnr })
 
   if #clients == 0 then
-    vim.notify("[LSP] 当前缓冲区没有活动的 LSP 客户端")
+    print("当前缓冲区没有活动的 LSP 客户端")
   else
-    vim.notify("[LSP] 当前缓冲区的 LSP 客户端:")
+    print("当前缓冲区的 LSP 客户端:")
     for _, client in ipairs(clients) do
-      vim.notify("[LSP]   - " .. client.name)
-      vim.notify("[LSP]     格式化支持: " .. tostring(client.server_capabilities.documentFormattingProvider))
-      vim.notify("[LSP]     悬停支持: " .. tostring(client.server_capabilities.hoverProvider))
+      print("  - " .. client.name)
+      print("    格式化支持: " .. tostring(client.server_capabilities.documentFormattingProvider))
+      print("    悬停支持: " .. tostring(client.server_capabilities.hoverProvider))
     end
   end
 
-  vim.notify("[LSP] 文件类型: " .. vim.bo.filetype)
+  print("文件类型: " .. vim.bo.filetype)
 
   local servers = M.filetype_mappings[vim.bo.filetype]
   if servers then
-    vim.notify("[LSP] 配置的 LSP 服务器: " .. table.concat(servers, ", "))
+    print("配置的 LSP 服务器: " .. table.concat(servers, ", "))
   end
 
   -- 显示所有可用的 LSP 服务器
   local available_servers = M.get_available_servers()
   if #available_servers > 0 then
     table.sort(available_servers)
-    vim.notify("[LSP] 可用的 LSP 服务器: " .. table.concat(available_servers, ", "))
+    print("可用的 LSP 服务器: " .. table.concat(available_servers, ", "))
   end
 
   -- 显示格式化器信息
@@ -2560,9 +2549,9 @@ vim.api.nvim_create_user_command("LspStatus", function()
     local ft = vim.bo.filetype
     local formatters = M.formatters_by_ft[ft] or {}
     if #formatters > 0 then
-      vim.notify("[LSP] 配置的格式化器: " .. table.concat(formatters, ", "))
+      print("配置的格式化器: " .. table.concat(formatters, ", "))
     else
-      vim.notify("[LSP] 配置的格式化器: 无")
+      print("配置的格式化器: 无")
     end
   end
 end, { desc = "显示 LSP 状态" })
@@ -2572,23 +2561,27 @@ vim.api.nvim_create_user_command("LspClients", function()
   local bufnr = vim.api.nvim_get_current_buf()
   local ft = vim.bo.filetype
 
-  vim.notify("[LSP] === LSP 客户端详细信息 ===")
-  vim.notify("[LSP] 缓冲区: " .. bufnr)
-  vim.notify("[LSP] 文件类型: " .. ft)
-  vim.notify("[LSP] ")
+  print("=== LSP 客户端详细信息 ===")
+  print("缓冲区: " .. bufnr)
+  print("文件类型: " .. ft)
+  print("")
 
   -- 当前缓冲区的客户端
   local buf_clients = vim.lsp.get_clients({ bufnr = bufnr })
-  vim.notify("[LSP] 附加到当前缓冲区的客户端 (" .. #buf_clients .. " 个):")
+  print("附加到当前缓冲区的客户端 (" .. #buf_clients .. " 个):")
   for _, client in ipairs(buf_clients) do
-    vim.notify("[LSP]   " .. client.name .. " (ID: " .. client.id .. ")")
-    vim.notify("[LSP]     配置文件: " .. (client.config and "是" or "否"))
+    print("  " .. client.name .. " (ID: " .. client.id .. ")")
+    print("    配置文件: " .. (client.config and "是" or "否"))
     -- 获取文件类型
     local filetypes_str = "未知"
     if client.config then
       local filetypes = nil
-      if client.config.filetypes and type(client.config.filetypes) == "table" then
-        filetypes = client.config.filetypes
+      -- 尝试从不同位置获取文件类型
+      ---@diagnostic disable-next-line: undefined-field
+      local possible_filetypes = client.config.filetypes
+        or (client.config.init_options and client.config.init_options.filetypes)
+      if possible_filetypes and type(possible_filetypes) == "table" then
+        filetypes = possible_filetypes
       elseif
         client.config.init_options
         and client.config.init_options.filetypes
@@ -2601,15 +2594,15 @@ vim.api.nvim_create_user_command("LspClients", function()
         filetypes_str = table.concat(filetypes, ", ")
       end
     end
-    vim.notify("    文件类型: " .. filetypes_str)
-    vim.notify("[LSP]     根目录: " .. (client.config and client.config.root_dir or "无"))
+    print("    文件类型: " .. filetypes_str)
+    print("    根目录: " .. (client.config and client.config.root_dir or "无"))
   end
 
-  vim.notify("[LSP] ")
+  print("")
 
   -- 所有客户端
   local all_clients = vim.lsp.get_clients()
-  vim.notify("[LSP] 所有 LSP 客户端 (" .. #all_clients .. " 个):")
+  print("所有 LSP 客户端 (" .. #all_clients .. " 个):")
 
   local clients_by_name = {}
   for _, client in ipairs(all_clients) do
@@ -2620,9 +2613,9 @@ vim.api.nvim_create_user_command("LspClients", function()
   end
 
   for name, client_list in pairs(clients_by_name) do
-    vim.notify("[LSP]   " .. name .. ": " .. #client_list .. " 个实例")
+    print("  " .. name .. ": " .. #client_list .. " 个实例")
     for _, client in ipairs(client_list) do
-      vim.notify("[LSP]     实例 ID: " .. client.id)
+      print("    实例 ID: " .. client.id)
 
       -- 检查附加的缓冲区
       local attached_buffers = {}
@@ -2633,61 +2626,27 @@ vim.api.nvim_create_user_command("LspClients", function()
       end
 
       if #attached_buffers > 0 then
-        vim.notify("[LSP]     附加到缓冲区: " .. table.concat(attached_buffers, ", "))
+        print("    附加到缓冲区: " .. table.concat(attached_buffers, ", "))
       else
-        vim.notify("[LSP]     未附加到任何缓冲区")
+        print("    未附加到任何缓冲区")
       end
     end
   end
 
-  vim.notify("[LSP] ")
-  vim.notify("[LSP] === 结束 ===")
+  print("")
+  print("=== 结束 ===")
 end, { desc = "显示所有 LSP 客户端的详细信息" })
 
 vim.api.nvim_create_user_command("LspCleanup", function()
-  -- 清理重复的 LSP 客户端
-  local all_clients = vim.lsp.get_clients()
-  local clients_by_name = {}
-  local removed = 0
-
-  -- 按名称分组客户端
-  for _, client in ipairs(all_clients) do
-    if not clients_by_name[client.name] then
-      clients_by_name[client.name] = {}
-    end
-    table.insert(clients_by_name[client.name], client)
-  end
-
-  -- 检查每个名称的客户端
-  for name, client_list in pairs(clients_by_name) do
-    if #client_list > 1 then
-      vim.notify("[LSP] 发现重复的 LSP 客户端: " .. name .. " (" .. #client_list .. " 个实例)")
-
-      -- 保留第一个，停止其他的
-      for i = 2, #client_list do
-        local client = client_list[i]
-        vim.notify("[LSP]   停止实例 ID: " .. client.id)
-        client:stop()
-        removed = removed + 1
-      end
-    end
-  end
-
-  if removed > 0 then
-    vim.notify("[LSP] 已停止 " .. removed .. " 个重复的 LSP 客户端实例")
-    vim.notify("[LSP] 已清理 " .. removed .. " 个重复的 LSP 客户端", vim.log.levels.INFO)
-  else
-    vim.notify("[LSP] 未发现重复的 LSP 客户端")
-    vim.notify("[LSP] 没有发现重复的 LSP 客户端", vim.log.levels.INFO)
-  end
+  M.cleanup_duplicate_clients()
 end, { desc = "清理重复的 LSP 客户端" })
 
 vim.api.nvim_create_user_command("LspDebug", function()
   vim.g.lsp_debug = not vim.g.lsp_debug
   if vim.g.lsp_debug then
-    vim.notify("[LSP] LSP 调试模式已启用", vim.log.levels.INFO)
+    print("LSP 调试模式已启用", vim.log.levels.INFO)
   else
-    vim.notify("[LSP] LSP 调试模式已禁用", vim.log.levels.INFO)
+    print("LSP 调试模式已禁用", vim.log.levels.INFO)
   end
 end, { desc = "切换 LSP 调试模式" })
 
@@ -2695,16 +2654,16 @@ vim.api.nvim_create_user_command("LspListServers", function()
   -- 列出所有可用的 LSP 服务器
   local servers = M.get_available_servers()
   if #servers == 0 then
-    vim.notify("[LSP] 没有找到可用的 LSP 服务器配置")
+    print("没有找到可用的 LSP 服务器配置")
     return
   end
 
   table.sort(servers)
-  vim.notify("[LSP] 可用的 LSP 服务器配置 (" .. #servers .. " 个):")
+  print("可用的 LSP 服务器配置 (" .. #servers .. " 个):")
   for _, server in ipairs(servers) do
     local config = M.server_configs[server]
     local has_config = next(config) ~= nil
-    vim.notify(string.format("  - %-20s %s", server, has_config and "✓ 有配置" or "✗ 无配置"))
+    print(string.format("  - %-20s %s", server, has_config and "✓ 有配置" or "✗ 无配置"))
   end
 end, { desc = "列出所有可用的 LSP 服务器" })
 
@@ -2817,13 +2776,19 @@ vim.api.nvim_create_user_command("LuaLSStatus", function()
     -- 检查配置
     if client.config and client.config.settings then
       vim.notify("[LSP] 配置已加载: 是")
+      -- 安全地访问 Lua 诊断配置
+      ---@diagnostic disable-next-line: undefined-field
+      local lua_settings = client.config.settings.Lua
       if
-        client.config.settings
-        and client.config.settings.Lua
-        and client.config.settings.Lua.diagnostics
-        and type(client.config.settings.Lua.diagnostics) == "table"
+        lua_settings
+        and type(lua_settings) == "table"
+        ---@diagnostic disable-next-line: undefined-field
+        and lua_settings.diagnostics
+        ---@diagnostic disable-next-line: undefined-field
+        and type(lua_settings.diagnostics) == "table"
       then
-        local globals = client.config.settings.Lua.diagnostics.globals
+        ---@diagnostic disable-next-line: undefined-field
+        local globals = lua_settings.diagnostics.globals
         if type(globals) == "table" then
           vim.notify("[LSP] 定义的全局变量: " .. table.concat(globals, ", "))
         else
@@ -2995,8 +2960,12 @@ vim.api.nvim_create_user_command("LspTestFiletype", function()
     -- 检查文件类型配置
     local filetypes = nil
     if client.config then
-      if client.config.filetypes and type(client.config.filetypes) == "table" then
-        filetypes = client.config.filetypes
+      -- 尝试从不同位置获取文件类型
+      ---@diagnostic disable-next-line: undefined-field
+      local possible_filetypes = client.config.filetypes
+        or (client.config.init_options and client.config.init_options.filetypes)
+      if possible_filetypes and type(possible_filetypes) == "table" then
+        filetypes = possible_filetypes
       elseif
         client.config.init_options
         and client.config.init_options.filetypes
@@ -3073,11 +3042,21 @@ vim.api.nvim_create_user_command("LspQuickFix", function()
     if client.config and client.config.settings then
       if client.name == "lua_ls" and client.config.settings.Lua then
         -- 检查是否有我们配置的全局变量
+        -- 安全地访问 Lua 配置
+        ---@diagnostic disable-next-line: undefined-field
+        local lua_settings = client.config.settings.Lua
+        -- 安全地访问 Lua 诊断配置
         if
-          client.config.settings.Lua
-          and client.config.settings.Lua.diagnostics
-          and client.config.settings.Lua.diagnostics.globals
-          and type(client.config.settings.Lua.diagnostics.globals) == "table"
+          lua_settings
+          and type(lua_settings) == "table"
+          ---@diagnostic disable-next-line: undefined-field
+          and lua_settings.diagnostics
+          ---@diagnostic disable-next-line: undefined-field
+          and type(lua_settings.diagnostics) == "table"
+          ---@diagnostic disable-next-line: undefined-field
+          and lua_settings.diagnostics.globals
+          ---@diagnostic disable-next-line: undefined-field
+          and type(lua_settings.diagnostics.globals) == "table"
         then
           is_default_config = false
         end
@@ -3142,9 +3121,14 @@ vim.api.nvim_create_user_command("LspFixNow", function()
           if not vim.lsp.buf_is_attached(bufnr, client.id) then
             -- 检查文件类型是否匹配
             local should_attach = true
-            if client.config and client.config.filetypes and type(client.config.filetypes) == "table" then
+            -- 尝试从不同位置获取文件类型
+            ---@diagnostic disable-next-line: undefined-field
+            local client_filetypes = client.config
+              ---@diagnostic disable-next-line: undefined-field
+              and (client.config.filetypes or (client.config.init_options and client.config.init_options.filetypes))
+            if client_filetypes and type(client_filetypes) == "table" then
               should_attach = false
-              for _, client_ft in ipairs(client.config.filetypes) do
+              for _, client_ft in ipairs(client_filetypes) do
                 if client_ft == ft then
                   should_attach = true
                   break
@@ -3210,32 +3194,7 @@ function M.start_server_with_config(server_name, bufnr)
       name = server_name,
       cmd = cmd,
       settings = config.settings or {},
-      on_attach = config.on_attach or function(client, attached_bufnr)
-        -- 默认的 on_attach 函数
-        if client.server_capabilities.documentFormattingProvider then
-          vim.bo[attached_bufnr].formatexpr = "v:lua.vim.lsp.formatexpr()"
-        end
-
-        -- 设置缓冲区本地按键映射
-        local bufopts = { noremap = true, silent = true, buffer = bufnr }
-        vim.keymap.set("n", "gD", vim.lsp.buf.declaration, bufopts)
-        vim.keymap.set("n", "gd", vim.lsp.buf.definition, bufopts)
-        vim.keymap.set("n", "K", vim.lsp.buf.hover, bufopts)
-        vim.keymap.set("n", "gi", vim.lsp.buf.implementation, bufopts)
-        vim.keymap.set("n", "<C-k>", vim.lsp.buf.signature_help, bufopts)
-        vim.keymap.set("n", "<leader>wa", vim.lsp.buf.add_workspace_folder, bufopts)
-        vim.keymap.set("n", "<leader>wr", vim.lsp.buf.remove_workspace_folder, bufopts)
-        vim.keymap.set("n", "<leader>wl", function()
-          vim.notify(vim.inspect(vim.lsp.buf.list_workspace_folders()))
-        end, bufopts)
-        vim.keymap.set("n", "<leader>D", vim.lsp.buf.type_definition, bufopts)
-        vim.keymap.set("n", "<leader>rn", vim.lsp.buf.rename, bufopts)
-        vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, bufopts)
-        vim.keymap.set("n", "gr", vim.lsp.buf.references, bufopts)
-        vim.keymap.set("n", "<leader>f", function()
-          vim.lsp.buf.format({ async = true })
-        end, bufopts)
-      end,
+      on_attach = config.on_attach or default_on_attach,
       capabilities = config.capabilities or vim.lsp.protocol.make_client_capabilities(),
       root_dir = config.root_dir or vim.fn.getcwd(),
       filetypes = config.filetypes,
@@ -3695,8 +3654,9 @@ vim.api.nvim_create_user_command("LspProcessStatus", function()
   local active_clients = vim.lsp.get_clients()
   local active_pids = {}
   for _, client in ipairs(active_clients) do
-    -- 检查 client.rpc.pid
-    local pid = client.rpc and client.rpc.pid
+    -- 检查 client.pid
+    ---@diagnostic disable-next-line: undefined-field
+    local pid = client.pid
     if pid then
       active_pids[pid] = true
     end

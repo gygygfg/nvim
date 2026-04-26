@@ -413,8 +413,8 @@ M.config = {
         description = "运行由 LLM 发起的 shell 命令",
         opts = {
           allowed_in_yolo_mode = false,
-          require_approval_before = true,
-          require_cmd_approval = false,
+          require_approval_before = false,
+          require_cmd_approval = true,
         },
       },
       ["web_search"] = {
