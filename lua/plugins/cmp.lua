@@ -167,7 +167,7 @@ local function _cmp_setup()
             end
           end
         end
-        end
+
         if best_entry then
           local new_word = best_entry:get_word()
           local new_cmdline = cmdline:sub(1, ws - 1) .. new_word .. cmdline:sub(we + 1)
