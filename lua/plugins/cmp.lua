@@ -3,7 +3,7 @@
 -- 否则 cmp 的 cmdline mapping 收不到 Tab 事件
 vim.opt.wildchar = 26   -- <C-z> 的 ASCII 码
 vim.opt.wildcharm = 26
-
+vim.pack.add({
   -- 补全相关
   gh("hrsh7th/nvim-cmp"),
   gh("hrsh7th/cmp-path"),
