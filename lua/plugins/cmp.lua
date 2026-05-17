@@ -104,7 +104,7 @@ local function _cmp_setup()
     },
   })
 
-  -- 命令行补全：将 wildchar 改为 <C-z>，释放 Tab 给 cmp 使用
+  -- 命令行补全：释放 Tab 键给 cmp 使用，不让 Vim 内置的 wildmenu 拦截
   vim.opt.wildcharm = vim.api.nvim_replace_termcodes("<C-z>", true, true, true)
   vim.opt.wildchar = vim.api.nvim_replace_termcodes("<C-z>", true, true, true)
 
