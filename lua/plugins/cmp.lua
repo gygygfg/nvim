@@ -143,57 +143,21 @@ local function _cmp_setup()
   end
 
   cmdline_mappings["<Tab>"] = cmp.mapping(function(fallback)
-    local spell_ok, spell = pcall(require, "core.spell")
-
     if cmp.visible() then
-      -- cmp 可见时：尝试根据菜单项自动纠正拼写
-      local ok, corrected = pcall(function()
-        local cursor_word, ws, we, cmdline = get_cmdline_word()
-        if not cursor_word then return false end
+      -- cmp 可见时：Tab 用于导航菜单项（选择下一个），而不是自动纠正
+      cmp.select_next_item()
+      return
+    end
 
-        local entries = cmp.get_entries()
-        if not entries or #entries == 0 then return false end
-
-        local best_match = nil
-        local best_dist = math.huge
-
-        for _, entry in ipairs(entries) do
-          -- 从 completion item 获取候选文本
-          local candidate = nil
-          local item = entry:get_completion_item()
-          if item and item.label and type(item.label) == "string" then
-            candidate = item.label
-          else
-            candidate = entry:get_word()
-          end
-          if not candidate or candidate == "" then
-            candidate = tostring(entry.completion_item.label or "")
-          end
-          if candidate and candidate ~= "" then
-            local dist = spell._levenshtein(cursor_word:lower(), candidate:lower())
-            if dist > 0 and dist < best_dist and dist <= 2 then
-              best_dist = dist
-              best_match = candidate
-            end
-          end
-        end
-
-        if best_match then
-          local new_cmdline = cmdline:sub(1, ws - 1) .. best_match .. cmdline:sub(we + 1)
-          vim.fn.setcmdline(new_cmdline)
-          vim.fn.setcmdpos(ws - 1 + #best_match + 1)
-          cmp.close()
-          return true
-        end
-        return false
-      end)
-
-      if ok and corrected then
+    -- cmp 不可见时：尝试拼写自动纠正（输入的命令可能有拼写错误）
+    local spell_ok, spell = pcall(require, "core.spell")
+    if spell_ok and spell.config and spell.config.auto_correct_on_tab then
+      if spell.auto_correct_current_word() then
         return
       end
     end
 
-    -- 原 Tab 行为（导航菜单或回退）
+    -- 回退到原始 Tab 行为
     orig_tab(fallback)
   end, { "c" })
 
