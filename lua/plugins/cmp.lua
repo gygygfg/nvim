@@ -133,8 +133,8 @@ local function _cmp_setup()
     -- 执行原 Tab 行为（cmp 菜单导航）
     orig_tab(fallback)
   end, { "c" })
-    orig_tab(fallback)
-  end, { "c" })
+
+
 
   cmp.setup.cmdline(":", {
     mapping = cmdline_mappings,
