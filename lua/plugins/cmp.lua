@@ -198,7 +198,8 @@ local function _cmp_setup()
         local best_dist = math.huge
         for _, candidate in ipairs(candidates) do
           local dist = spell._levenshtein(cursor_word:lower(), candidate:lower())
-          if dist < best_dist and dist <= 2 then
+          -- 排除自身匹配 (dist == 0)，避免用自身替换自身
+          if dist > 0 and dist < best_dist and dist <= 2 then
             best_dist = dist
             best_match = candidate
           end
