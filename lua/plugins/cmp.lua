@@ -109,7 +109,6 @@ local function _cmp_setup()
   vim.opt.wildchar = vim.api.nvim_replace_termcodes("<C-z>", true, true, true)
 
   cmp.setup.cmdline({ "/", "?" }, {
-  cmp.setup.cmdline({ "/", "?" }, {
     mapping = cmp.mapping.preset.cmdline(),
     sources = {
       { name = "buffer" },
