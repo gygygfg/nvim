@@ -161,8 +161,6 @@ local function _cmp_setup()
     end
     -- 回退：什么也不做（防止 ^I 插入命令行）
   end, { "c" })
-
-  cmp.setup.cmdline(":", {
     mapping = cmdline_mappings,
     sources = cmp.config.sources({
       { name = "path" },
