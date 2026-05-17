@@ -150,9 +150,34 @@ local function _cmp_setup()
       local cursor_word, ws, we, cmdline = get_cmdline_word()
       if not cursor_word then return false end
 
-      -- 第1步：用 getcompletion 获取 cmdline 候选，Levenshtein 匹配
-      -- getcompletion 基于前缀匹配，所以尝试多种前缀长度
+      -- 第1步：优先从 cmp 可见候选中做 Levenshtein 匹配
+      -- （用户看到什么就纠正为什么，优先级最高）
+      if cmp.visible() and spell_ok and spell._levenshtein then
+        local entries = cmp.get_entries()
+        local best_entry = nil
+        local best_dist = math.huge
+        for _, entry in ipairs(entries) do
+          local word = entry:get_word()
+          if word then
+            local dist = spell._levenshtein(cursor_word:lower(), word:lower())
+            if dist < best_dist and dist <= 2 then
+              best_dist = dist
+              best_entry = entry
+            end
+          end
+        end
+        if best_entry then
+          local new_word = best_entry:get_word()
+          local new_cmdline = cmdline:sub(1, ws - 1) .. new_word .. cmdline:sub(we + 1)
+          vim.fn.setcmdline(new_cmdline)
+          vim.fn.setcmdpos(ws - 1 + #new_word + 1)
+          return true
+        end
+      end
+
+      -- 第2步：用 getcompletion 获取 cmdline 候选，Levenshtein 匹配
       -- （包含内置命令，弥补 nvim_get_commands 只返回用户命令的不足）
+      -- getcompletion 基于前缀匹配，所以尝试多种前缀长度
       local candidates = {}
       local seen = {}
       for pre_len = 1, math.min(4, #cursor_word) do
@@ -184,7 +209,7 @@ local function _cmp_setup()
         end
       end
 
-      -- 第2步：回退到 spellsuggest 拼写纠正
+      -- 第3步：回退到 spellsuggest 拼写纠正
       if spell_ok and spell.config and spell.config.auto_correct_on_tab then
         if spell.auto_correct_current_word() then
           if cmp.visible() then
@@ -200,7 +225,9 @@ local function _cmp_setup()
       return
     end
 
-    -- 第3步：执行原 Tab 行为（cmp 菜单导航）
+    -- 第4步：执行原 Tab 行为（cmp 菜单导航）
+    orig_tab(fallback)
+  end, { "c" })
     orig_tab(fallback)
   end, { "c" })
 
