@@ -116,7 +116,7 @@ local function _cmp_setup()
   })
 
   -- 加载 cmp-cmdline 插件（因为它是 opt 包）
-  vim.cmd.packadd("cmp-cmdline")
+  -- wildchar 已在文件顶部设置（必须优先于 cmp 初始化）
 
   -- 关键：把 wildchar 从默认 <Tab> 改为 <C-z>，释放 Tab 键给 cmp 管理
   -- 否则 Vim 内置机制会在底层拦截 Tab，cmp 映射收不到按键
