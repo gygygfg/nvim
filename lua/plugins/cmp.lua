@@ -148,18 +148,19 @@ local function _cmp_setup()
     if cmp.visible() then
       -- cmp 可见时：Tab 用于导航菜单项
       cmp.select_next_item()
-      return
+      return true
     end
 
     -- cmp 不可见时：尝试拼写自动纠正
     local spell_ok, spell = pcall(require, "core.spell")
     if spell_ok and spell.config and spell.config.auto_correct_on_tab then
       if spell.auto_correct_current_word() then
-        return
+        return true
       end
     end
     -- 回退：发送 <C-z> 触发 Vim 内置 wildmenu（wildchar 已改为 <C-z>）
     vim.fn.feedkeys(vim.api.nvim_replace_termcodes("<C-z>", true, true, true), "n")
+    return true
   end, { "c" })
 
   cmp.setup.cmdline(":", {
