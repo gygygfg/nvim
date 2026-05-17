@@ -81,7 +81,6 @@ local function get_word_boundaries(line, col)
 end
 
 -- 自动纠正当前单词（使用第一个建议）
--- 自动纠正当前单词（使用第一个建议）
 function M.auto_correct_current_word()
   -- 先尝试命令模式处理
   local cmdline = vim.fn.getcmdline()
