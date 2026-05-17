@@ -116,19 +116,21 @@ local function _cmp_setup()
   vim.cmd.packadd("cmp-cmdline")
 
   local cmdline_mappings = cmp.mapping.preset.cmdline()
-  -- 在命令模式 Tab 中集成拼写纠正（仅在 cmp 不可见时）
+  -- 在命令模式 Tab 中集成拼写纠正（始终优先，与 insert 模式保持一致）
   local orig_tab = cmdline_mappings["<Tab>"]["c"]
   cmdline_mappings["<Tab>"] = cmp.mapping(function(fallback)
-    -- cmp 可见时，直接选择补全项，不做拼写纠正
-    if not cmp.visible() then
-      local spell_ok, spell = pcall(require, "core.spell")
-      if spell_ok and spell.config and spell.config.auto_correct_on_tab then
-        if spell.auto_correct_current_word() then
-          return
+    -- 优先尝试拼写自动纠正（在 cmp 导航之前，因为 typo 时补全内容也是错的）
+    local spell_ok, spell = pcall(require, "core.spell")
+    if spell_ok and spell.config and spell.config.auto_correct_on_tab then
+      if spell.auto_correct_current_word() then
+        -- 纠正成功后关闭 cmp 菜单，避免显示过时条目
+        if cmp.visible() then
+          cmp.close()
         end
+        return
       end
     end
-    -- 执行原 Tab 行为
+    -- 执行原 Tab 行为（cmp 菜单导航）
     orig_tab(fallback)
   end, { "c" })
 
