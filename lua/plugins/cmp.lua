@@ -19,8 +19,8 @@ local function _cmp_setup()
   local spell_ok, spell = pcall(require, "core.spell")
   if spell_ok then
     spell.setup({
-      enabled = false, -- 禁用拼写纠正
-      auto_correct_on_tab = false, -- 禁用按 Tab 时自动纠正
+      enabled = true,
+      auto_correct_on_tab = true,
     })
   end
 
@@ -50,10 +50,20 @@ local function _cmp_setup()
           if buftype == "prompt" or buftype == "nofile" then
             return false
           end
-          local line, col = unpack(vim.api.nvim_win_get_cursor(0))
+          local cursor = vim.api.nvim_win_get_cursor(0)
+          local line, col = cursor[1], cursor[2]
           return col ~= 0 and vim.api.nvim_buf_get_text(0, line - 1, 0, line - 1, col, {})[1]:match("^%s*$") == nil
         end
 
+        -- 优先尝试拼写自动纠正（在 cmp 可见之前，因为 typo 时补全内容也是错的）
+        local spell_ok, spell = pcall(require, "core.spell")
+        if spell_ok and spell.config and spell.config.auto_correct_on_tab and has_words_before() then
+          if spell.auto_correct_current_word() then
+            return
+          end
+        end
+
+        -- 正常补全流程
         if cmp.visible() then
           cmp.select_next_item()
         elseif luasnip.expand_or_jumpable() then
@@ -105,8 +115,25 @@ local function _cmp_setup()
   -- 加载 cmp-cmdline 插件（因为它是 opt 包）
   vim.cmd.packadd("cmp-cmdline")
 
+  local cmdline_mappings = cmp.mapping.preset.cmdline()
+  -- 在命令模式 Tab 中集成拼写纠正（仅在 cmp 不可见时）
+  local orig_tab = cmdline_mappings["<Tab>"]["c"]
+  cmdline_mappings["<Tab>"] = cmp.mapping(function(fallback)
+    -- cmp 可见时，直接选择补全项，不做拼写纠正
+    if not cmp.visible() then
+      local spell_ok, spell = pcall(require, "core.spell")
+      if spell_ok and spell.config and spell.config.auto_correct_on_tab then
+        if spell.auto_correct_current_word() then
+          return
+        end
+      end
+    end
+    -- 执行原 Tab 行为
+    orig_tab(fallback)
+  end, { "c" })
+
   cmp.setup.cmdline(":", {
-    mapping = cmp.mapping.preset.cmdline(),
+    mapping = cmdline_mappings,
     sources = cmp.config.sources({
       { name = "path" },
     }, {
@@ -120,7 +147,7 @@ local function _cmp_setup()
   })
 end
 
-vim.api.nvim_create_autocmd({ "insertEnter", "CmdlineChanged" }, {
+vim.api.nvim_create_autocmd({ "InsertEnter", "CmdlineChanged" }, {
   once = true,
   callback = function()
     _cmp_setup()
