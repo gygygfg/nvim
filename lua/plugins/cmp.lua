@@ -116,56 +116,34 @@ local function _cmp_setup()
   })
 
   -- 加载 cmp-cmdline 插件（因为它是 opt 包）
-  -- wildchar 已在文件顶部设置（必须优先于 cmp 初始化）
+  vim.cmd.packadd("cmp-cmdline")
 
-  -- 关键：把 wildchar 从默认 <Tab> 改为 <C-z>，释放 Tab 键给 cmp 管理
-  -- 否则 Vim 内置机制会在底层拦截 Tab，cmp 映射收不到按键
-  vim.opt.wildchar = 26  -- <C-z> 的 ASCII 码
-  vim.opt.wildcharm = 26
-
+  -- 获取预设的 cmdline mappings
   local cmdline_mappings = cmp.mapping.preset.cmdline()
 
-  -- 辅助函数：从命令行提取光标所在的单词
-  local function get_cmdline_word()
-    local cmdline = vim.fn.getcmdline()
-    if cmdline == "" then return nil end
-    local cmdpos = vim.fn.getcmdpos()
-    local pos = math.min(cmdpos, #cmdline)
-    if pos < 1 then pos = 1 end
-
-    local word_start = pos
-    for i = pos, 1, -1 do
-      local ch = cmdline:sub(i, i)
-      if ch:match("%w") then word_start = i else break end
-    end
-    local word_end = pos
-    for i = pos, #cmdline do
-      local ch = cmdline:sub(i, i)
-      if ch:match("%w") then word_end = i else break end
-    end
-    local word = cmdline:sub(word_start, word_end)
-    if word == "" then return nil end
-    return word, word_start, word_end, cmdline
-  end
-
-  cmdline_mappings["<Tab>"] = cmp.mapping(function(fallback)
+  -- 直接用底层 vim.keymap.set 接管命令行 Tab，不依赖 cmp.mapping 系统
+  -- 注意：cmp 使用 vim.on_key() 拦截按键，但 wildchar 释放后 Tab 由这里处理
+  vim.keymap.set("c", "<Tab>", function()
     if cmp.visible() then
       -- cmp 可见时：Tab 用于导航菜单项
       cmp.select_next_item()
-      return true
+      return
     end
 
     -- cmp 不可见时：尝试拼写自动纠正
     local spell_ok, spell = pcall(require, "core.spell")
     if spell_ok and spell.config and spell.config.auto_correct_on_tab then
       if spell.auto_correct_current_word() then
-        return true
+        return
       end
     end
-    -- 回退：发送 <C-z> 触发 Vim 内置 wildmenu（wildchar 已改为 <C-z>）
-    vim.fn.feedkeys(vim.api.nvim_replace_termcodes("<C-z>", true, true, true), "n")
-    return true
-  end, { "c" })
+
+    -- 回退：发送 <C-z> 触发 Vim 内置 wildmenu
+    vim.api.nvim_feedkeys(
+      vim.api.nvim_replace_termcodes("<C-z>", true, false, true),
+      "n", true
+    )
+  end, { noremap = true, silent = true })
 
   cmp.setup.cmdline(":", {
     mapping = cmdline_mappings,
