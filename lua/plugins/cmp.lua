@@ -150,15 +150,19 @@ local function _cmp_setup()
       local cursor_word, ws, we, cmdline = get_cmdline_word()
       if not cursor_word then return false end
 
-      -- 第1步：用 getcompletion 获取所有 cmdline 候选，Levenshtein 匹配
+      -- 第1步：用 getcompletion 获取 cmdline 候选，Levenshtein 匹配
+      -- getcompletion 基于前缀匹配，所以尝试多种前缀长度
       -- （包含内置命令，弥补 nvim_get_commands 只返回用户命令的不足）
-      local candidates = vim.fn.getcompletion(cursor_word, "cmdline")
-      -- 扩展候选列表：以前缀匹配的方式扩展更多候选
-      -- 取光标词的前3个字符作为扩展前缀
-      if #cursor_word >= 3 then
-        local ext = vim.fn.getcompletion(cursor_word:sub(1, 3), "cmdline")
-        for _, e in ipairs(ext) do
-          candidates[#candidates + 1] = e
+      local candidates = {}
+      local seen = {}
+      for pre_len = 1, math.min(4, #cursor_word) do
+        local prefix = cursor_word:sub(1, pre_len)
+        local results = vim.fn.getcompletion(prefix, "cmdline")
+        for _, r in ipairs(results) do
+          if type(r) == "string" and not seen[r] then
+            seen[r] = true
+            candidates[#candidates + 1] = r
+          end
         end
       end
 
@@ -166,12 +170,10 @@ local function _cmp_setup()
         local best_match = nil
         local best_dist = math.huge
         for _, candidate in ipairs(candidates) do
-          if type(candidate) == "string" then
-            local dist = spell._levenshtein(cursor_word:lower(), candidate:lower())
-            if dist < best_dist and dist <= 2 then
-              best_dist = dist
-              best_match = candidate
-            end
+          local dist = spell._levenshtein(cursor_word:lower(), candidate:lower())
+          if dist < best_dist and dist <= 2 then
+            best_dist = dist
+            best_match = candidate
           end
         end
         if best_match then
