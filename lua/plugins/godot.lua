@@ -186,7 +186,7 @@ vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
   append_output("")
 
   -- 导出 job
-  local export_job = vim.fn.jobstart({ godot_bin, "--headless", "--export", export_mode, export_path }, {
+  local export_job = vim.fn.jobstart({ godot_bin, "--headless", "--export-debug", export_mode, export_path }, {
     cwd = root,
     stdout_buffered = true,
     stderr_buffered = true,
