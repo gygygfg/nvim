@@ -104,7 +104,11 @@ local function _cmp_setup()
     },
   })
 
-  -- 命令行补全
+  -- 命令行补全：将 wildchar 改为 <C-z>，释放 Tab 给 cmp 使用
+  vim.opt.wildcharm = vim.api.nvim_replace_termcodes("<C-z>", true, true, true)
+  vim.opt.wildchar = vim.api.nvim_replace_termcodes("<C-z>", true, true, true)
+
+
   cmp.setup.cmdline({ "/", "?" }, {
     mapping = cmp.mapping.preset.cmdline(),
     sources = {
