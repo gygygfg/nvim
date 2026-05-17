@@ -159,13 +159,17 @@ local function _cmp_setup()
         return
       end
     end
-    -- 回退：什么也不做（防止 ^I 插入命令行）
-  end, { "c" })
+      -- 回退：什么也不做（防止 ^I 插入命令行）
+    end, { "c" })
+
+  -- 额外安全措施：在命令行模式下禁用 Tab 的默认行为
+  vim.api.nvim_set_keymap("c", "<Tab>", "<Nop>", { noremap = true, silent = true })
 
   cmp.setup.cmdline(":", {
     mapping = cmdline_mappings,
     sources = cmp.config.sources({
       { name = "path" },
+    }, {
     }, {
       {
         name = "cmdline",
