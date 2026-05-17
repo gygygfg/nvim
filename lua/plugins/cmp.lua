@@ -104,10 +104,6 @@ local function _cmp_setup()
     },
   })
 
-  -- 命令行补全：释放 Tab 键给 cmp 使用
-  vim.opt.wildcharm = vim.api.nvim_replace_termcodes("<C-z>", true, true, true):byte()
-  vim.opt.wildchar = vim.api.nvim_replace_termcodes("<C-z>", true, true, true):byte()
-
   cmp.setup.cmdline({ "/", "?" }, {
     mapping = cmp.mapping.preset.cmdline(),
     sources = {
@@ -157,7 +153,8 @@ local function _cmp_setup()
         return
       end
     end
-    -- 回退：什么也不做（防止 ^I 插入命令行）
+    -- 回退：调用 fallback（Vim 内置处理，不会产生 ^I，因为 wildchar 保持为默认 <Tab>）
+    fallback()
   end, { "c" })
 
   cmp.setup.cmdline(":", {
@@ -173,11 +170,6 @@ local function _cmp_setup()
       },
     }),
   })
-
-  -- 安全网：确保命令行模式下 Tab 永远不产生 ^I
-  -- cmp 内部使用 vim.on_key() 先拦截按键，然后才到 Vim 的映射系统
-  -- 所以 cmp 的 mapping 优先级更高，这个只是兜底
-  vim.api.nvim_set_keymap("c", "<Tab>", "<Nop>", { noremap = true, silent = true })
 end
 
 vim.api.nvim_create_autocmd({ "InsertEnter", "CmdlineChanged" }, {
