@@ -160,11 +160,13 @@ local function _cmp_setup()
           local word = entry:get_word()
           if word then
             local dist = spell._levenshtein(cursor_word:lower(), word:lower())
-            if dist < best_dist and dist <= 2 then
+            -- 排除自身匹配 (dist == 0)，避免用自身替换自身
+            if dist > 0 and dist < best_dist and dist <= 2 then
               best_dist = dist
               best_entry = entry
             end
           end
+        end
         end
         if best_entry then
           local new_word = best_entry:get_word()
