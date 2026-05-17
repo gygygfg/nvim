@@ -147,30 +147,38 @@ local function _cmp_setup()
 
     -- 使用 pcall 包裹自定义逻辑，捕获任何错误
     local ok, result = pcall(function()
-      -- 第1步：优先从 cmp 可见候选中做 Levenshtein 匹配
-      if cmp.visible() and spell_ok and spell._levenshtein then
-        local cursor_word, ws, we, cmdline = get_cmdline_word()
-        if cursor_word then
-          local entries = cmp.get_entries()
-          local best_entry = nil
-          local best_dist = math.huge
-          for _, entry in ipairs(entries) do
-            local word = entry:get_word()
-            if word then
-              local dist = spell._levenshtein(cursor_word:lower(), word:lower())
-              if dist < best_dist and dist <= 2 then
-                best_dist = dist
-                best_entry = entry
-              end
+      local cursor_word, ws, we, cmdline = get_cmdline_word()
+      if not cursor_word then return false end
+
+      -- 第1步：用 getcompletion 获取所有 cmdline 候选，Levenshtein 匹配
+      -- （包含内置命令，弥补 nvim_get_commands 只返回用户命令的不足）
+      local candidates = vim.fn.getcompletion(cursor_word, "cmdline")
+      -- 扩展候选列表：以前缀匹配的方式扩展更多候选
+      -- 取光标词的前3个字符作为扩展前缀
+      if #cursor_word >= 3 then
+        local ext = vim.fn.getcompletion(cursor_word:sub(1, 3), "cmdline")
+        for _, e in ipairs(ext) do
+          candidates[#candidates + 1] = e
+        end
+      end
+
+      if #candidates > 0 and spell_ok and spell._levenshtein then
+        local best_match = nil
+        local best_dist = math.huge
+        for _, candidate in ipairs(candidates) do
+          if type(candidate) == "string" then
+            local dist = spell._levenshtein(cursor_word:lower(), candidate:lower())
+            if dist < best_dist and dist <= 2 then
+              best_dist = dist
+              best_match = candidate
             end
           end
-          if best_entry then
-            local new_word = best_entry:get_word()
-            local new_cmdline = cmdline:sub(1, ws - 1) .. new_word .. cmdline:sub(we + 1)
-            vim.fn.setcmdline(new_cmdline)
-            vim.fn.setcmdpos(ws - 1 + #new_word + 1)
-            return true
-          end
+        end
+        if best_match then
+          local new_cmdline = cmdline:sub(1, ws - 1) .. best_match .. cmdline:sub(we + 1)
+          vim.fn.setcmdline(new_cmdline)
+          vim.fn.setcmdpos(ws - 1 + #best_match + 1)
+          return true
         end
       end
 
@@ -192,6 +200,7 @@ local function _cmp_setup()
 
     -- 第3步：执行原 Tab 行为（cmp 菜单导航）
     orig_tab(fallback)
+  end, { "c" })
   end, { "c" })
 
 
