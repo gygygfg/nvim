@@ -120,7 +120,7 @@ local function _cmp_setup()
 
   local cmdline_mappings = cmp.mapping.preset.cmdline()
   -- 在命令模式 Tab 中集成拼写纠正（始终优先，与 insert 模式保持一致）
-  local orig_tab = cmdline_mappings["<Tab>"]["c"]
+  -- 在命令模式 Tab 中集成拼写纠正（始终优先，与 insert 模式保持一致）
 
   -- 辅助函数：从命令行提取光标所在的单词
   local function get_cmdline_word()
