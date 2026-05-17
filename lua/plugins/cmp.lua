@@ -1,5 +1,9 @@
 -- lua/config/cmp.lua
-vim.pack.add({
+-- 必须优先设置：释放 Tab 键，防止 Vim 内置 wildmenu 在 C 层面拦截
+-- 否则 cmp 的 cmdline mapping 收不到 Tab 事件
+vim.opt.wildchar = 26   -- <C-z> 的 ASCII 码
+vim.opt.wildcharm = 26
+
   -- 补全相关
   gh("hrsh7th/nvim-cmp"),
   gh("hrsh7th/cmp-path"),
