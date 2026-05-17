@@ -104,7 +104,7 @@ local function _cmp_setup()
     },
   })
 
-  -- 命令行补全：释放 Tab 键给 cmp 使用，不让 Vim 内置的 wildmenu 拦截
+  -- 命令行补全：释放 Tab 键给 cmp 使用
   vim.opt.wildcharm = vim.api.nvim_replace_termcodes("<C-z>", true, true, true):byte()
   vim.opt.wildchar = vim.api.nvim_replace_termcodes("<C-z>", true, true, true):byte()
 
@@ -119,8 +119,6 @@ local function _cmp_setup()
   vim.cmd.packadd("cmp-cmdline")
 
   local cmdline_mappings = cmp.mapping.preset.cmdline()
-  -- 在命令模式 Tab 中集成拼写纠正（始终优先，与 insert 模式保持一致）
-  -- 在命令模式 Tab 中集成拼写纠正（始终优先，与 insert 模式保持一致）
 
   -- 辅助函数：从命令行提取光标所在的单词
   local function get_cmdline_word()
@@ -147,29 +145,25 @@ local function _cmp_setup()
 
   cmdline_mappings["<Tab>"] = cmp.mapping(function(fallback)
     if cmp.visible() then
-      -- cmp 可见时：Tab 用于导航菜单项（选择下一个），而不是自动纠正
+      -- cmp 可见时：Tab 用于导航菜单项
       cmp.select_next_item()
       return
     end
 
-    -- cmp 不可见时：尝试拼写自动纠正（输入的命令可能有拼写错误）
+    -- cmp 不可见时：尝试拼写自动纠正
     local spell_ok, spell = pcall(require, "core.spell")
     if spell_ok and spell.config and spell.config.auto_correct_on_tab then
       if spell.auto_correct_current_word() then
         return
       end
     end
-      -- 回退：什么也不做（防止 ^I 插入命令行）
-    end, { "c" })
-
-  -- 额外安全措施：在命令行模式下禁用 Tab 的默认行为
-  vim.api.nvim_set_keymap("c", "<Tab>", "<Nop>", { noremap = true, silent = true })
+    -- 回退：什么也不做（防止 ^I 插入命令行）
+  end, { "c" })
 
   cmp.setup.cmdline(":", {
     mapping = cmdline_mappings,
     sources = cmp.config.sources({
       { name = "path" },
-    }, {
     }, {
       {
         name = "cmdline",
@@ -179,6 +173,11 @@ local function _cmp_setup()
       },
     }),
   })
+
+  -- 安全网：确保命令行模式下 Tab 永远不产生 ^I
+  -- cmp 内部使用 vim.on_key() 先拦截按键，然后才到 Vim 的映射系统
+  -- 所以 cmp 的 mapping 优先级更高，这个只是兜底
+  vim.api.nvim_set_keymap("c", "<Tab>", "<Nop>", { noremap = true, silent = true })
 end
 
 vim.api.nvim_create_autocmd({ "InsertEnter", "CmdlineChanged" }, {
