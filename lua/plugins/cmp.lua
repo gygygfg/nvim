@@ -72,8 +72,8 @@ local function _cmp_setup()
           cmp.complete()
         else
           fallback()
+        end
       end, { "i", "s" }),
-      end, { "i", "s", "c" }),
       ["<S-Tab>"] = cmp.mapping(function(fallback)
         if cmp.visible() then
           cmp.select_prev_item()
