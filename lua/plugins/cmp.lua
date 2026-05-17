@@ -127,12 +127,64 @@ local function _cmp_setup()
     local pos = math.min(cmdpos, #cmdline)
     if pos < 1 then pos = 1 end
 
-    -- 向左找单词起始
     local word_start = pos
     for i = pos, 1, -1 do
       local ch = cmdline:sub(i, i)
       if ch:match("%w") then word_start = i else break end
     end
+    local word_end = pos
+    for i = pos, #cmdline do
+      local ch = cmdline:sub(i, i)
+      if ch:match("%w") then word_end = i else break end
+    end
+    local word = cmdline:sub(word_start, word_end)
+    if word == "" then return nil end
+    return word, word_start, word_end, cmdline
+  end
+
+  cmdline_mappings["<Tab>"] = cmp.mapping(function(fallback)
+    local spell_ok, spell = pcall(require, "core.spell")
+
+    -- 第1步：优先从 cmp 可见候选中做 Levenshtein 匹配
+    -- （解决 spellsuggest 无法匹配非字典词的场景）
+    if cmp.visible() and spell_ok and spell._levenshtein then
+      local cursor_word, ws, we, cmdline = get_cmdline_word()
+      if cursor_word then
+        local entries = cmp.get_entries()
+        local best_entry = nil
+        local best_dist = math.huge
+        for _, entry in ipairs(entries) do
+          local word = entry:get_word()
+          if word then
+            local dist = spell._levenshtein(cursor_word:lower(), word:lower())
+            if dist < best_dist and dist <= 2 then
+              best_dist = dist
+              best_entry = entry
+            end
+          end
+        end
+        if best_entry then
+          local new_word = best_entry:get_word()
+          local new_cmdline = cmdline:sub(1, ws - 1) .. new_word .. cmdline:sub(we + 1)
+          vim.fn.setcmdline(new_cmdline)
+          vim.fn.setcmdpos(ws - 1 + #new_word + 1)
+          return
+        end
+      end
+    end
+
+    -- 第2步：回退到 spellsuggest 拼写纠正
+    if spell_ok and spell.config and spell.config.auto_correct_on_tab then
+      if spell.auto_correct_current_word() then
+        if cmp.visible() then
+          cmp.close()
+        end
+        return
+      end
+    end
+    -- 第3步：执行原 Tab 行为（cmp 菜单导航）
+    orig_tab(fallback)
+  end, { "c" })
     -- 向右找单词结束
     local word_end = pos
     for i = pos, #cmdline do
