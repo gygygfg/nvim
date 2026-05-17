@@ -159,9 +159,7 @@ local function _cmp_setup()
         return
       end
     end
-
-    -- 回退到原始 Tab 行为
-    orig_tab(fallback)
+    -- 回退：什么也不做（防止 ^I 插入命令行）
   end, { "c" })
 
   cmp.setup.cmdline(":", {
