@@ -93,3 +93,25 @@ require("plugins-manager").setup({
 
 -- 通知用户配置已加载
 vim.notify("Neovim 配置加载完成", vim.log.levels.INFO)
+
+-- 修复 LSP changetracking nil buf_state 错误
+-- patch M.send_changes 函数，在调用 send_changes_for_group 前过滤无效 buffer
+-- 参考: https://github.com/neovim/neovim/issues/31245
+do
+  local changetracking = vim.lsp._changetracking
+  if changetracking and changetracking.send_changes then
+    local original_send_changes = changetracking.send_changes
+    changetracking.send_changes = function(bufnr, firstline, lastline, new_lastline)
+      -- 检查 buffer 是否有效
+      if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
+        return
+      end
+      -- 检查 buffer 是否被标记为禁止 LSP
+      local ok, no_lsp = pcall(vim.api.nvim_buf_get_var, bufnr, "neoai_no_lsp")
+      if ok and no_lsp then
+        return
+      end
+      return original_send_changes(bufnr, firstline, lastline, new_lastline)
+    end
+  end
+end

@@ -56,6 +56,10 @@
       "rev": "2d7c2db2507fa3c4956142ee607431ddb2828639",
       "src": "https://github.com/stevearc/dressing.nvim"
     },
+    "edit-markdown-table.nvim": {
+      "rev": "0663bc883efa38b09a6c1e8622ae4fd48efe1d8a",
+      "src": "https://github.com/kiran94/edit-markdown-table.nvim"
+    },
     "fidget.nvim": {
       "rev": "889e2e96edef4e144965571d46f7a77bcc4d0ddf",
       "src": "https://github.com/j-hui/fidget.nvim"
@@ -63,6 +67,14 @@
     "gitsigns.nvim": {
       "rev": "e1fb5425c8812214209b3f24eaa582c6c552cf98",
       "src": "https://github.com/lewis6991/gitsigns.nvim"
+    },
+    "godot-lsp.nvim": {
+      "rev": "4a29e680a6c21ff7b6f1c45f686d1cceb1420828",
+      "src": "https://github.com/dpowling/godot-lsp.nvim"
+    },
+    "godotdev.nvim": {
+      "rev": "ad3881a4da12ed9e4a1032fa920d872ff6dd9c49",
+      "src": "https://github.com/Mathijs-Bakker/godotdev.nvim"
     },
     "lspkind.nvim": {
       "rev": "c7274c48137396526b59d86232eabcdc7fed8a32",
@@ -171,6 +183,10 @@
     "rainbow-delimiters.nvim": {
       "rev": "aab6caaffd79b8def22ec4320a5344f7c42f58d2",
       "src": "https://github.com/HiPhish/rainbow-delimiters.nvim"
+    },
+    "render-markdown.nvim": {
+      "rev": "3f3eea97b80839f629c951ca660ffd125bfa5b34",
+      "src": "https://github.com/MeanderingProgrammer/render-markdown.nvim"
     },
     "telescope-fzf-native.nvim": {
       "rev": "6fea601bd2b694c6f2ae08a6c6fab14930c60e2c",

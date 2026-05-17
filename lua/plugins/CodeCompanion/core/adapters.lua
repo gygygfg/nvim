@@ -1,5 +1,6 @@
 -- CodeCompanion 适配器配置
 -- 文件：CodeCompanion/adapters.lua
+-- "thinking": {"type": "enabled/disabled"}
 
 local M = {}
 
@@ -19,14 +20,30 @@ M.config = {
               ["deepseek-chat"] = {
                 nice_name = "DeepSeek Chat",
                 opts = {
-                  max_tokens = 8192,
+                  -- max_tokens = 8192,
                 },
               },
               ["deepseek-reasoner"] = {
                 nice_name = "DeepSeek Reasoner",
                 opts = {
-                  can_reason = true,
-                  max_tokens = 32768,
+                  -- can_reason = true,
+                  -- max_tokens = 32768,
+                },
+              },
+              ["deepseek-v4-flash"] = {
+                nice_name = "DeepSeek Reasoner",
+                opts = {
+                  -- can_reason = true,
+                  -- max_tokens = 32768,
+                  thinking = { type = "disabled" },
+                },
+              },
+              ["deepseek-v4-pro"] = {
+                nice_name = "DeepSeek Reasoner",
+                opts = {
+                  -- can_reason = true,
+                  -- max_tokens = 32768,
+                  thinking = { type = "disabled" },
                 },
               },
               ["deepseek-code"] = {
@@ -37,7 +54,8 @@ M.config = {
               },
             },
           },
-          temperature = { default = 0.2 },
+          -- temperature = { default = 0.2 },
+          thinking = { type = "disabled" },
         },
         opts = {
           timeout = 30000,

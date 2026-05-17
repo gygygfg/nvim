@@ -1,4 +1,11 @@
-vim.opt.packpath:append("/root/NeoAI")
+-- 加载本地插件 NeoAI（通过符号链接到 packpath）
+vim.cmd("packadd NeoAI")
+
+vim.pack.add({
+  -- markdown渲染
+  gh("kiran94/edit-markdown-table.nvim"),
+  gh("MeanderingProgrammer/render-markdown.nvim"),
+})
 
 vim.api.nvim_create_autocmd("VimEnter", {
   once = true,
@@ -10,9 +17,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
       ai = {
         scenarios = {
           chat = {
-            -- deepseek-v4-flash
-            -- deepseek-v4-pro
-            model_name = "deepseek-v4-pro",
+            -- model_name = "deepseek-v4-pro",
           },
         },
       },

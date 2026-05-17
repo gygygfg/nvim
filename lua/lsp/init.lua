@@ -463,10 +463,16 @@ local function setup_global_keymaps()
   -- vim.keymap.set("n", "gh", vim.lsp.buf.hover)
   vim.keymap.set("n", "g[", function()
     vim.diagnostic.jump({ count = -1, severity_limit = vim.diagnostic.severity.WARN })
-  end)
+    vim.schedule(function()
+      vim.diagnostic.open_float()
+    end)
+  end, { desc = "上一个诊断（自动打开悬浮窗口）" })
   vim.keymap.set("n", "g]", function()
     vim.diagnostic.jump({ count = 1, severity_limit = vim.diagnostic.severity.WARN })
-  end)
+    vim.schedule(function()
+      vim.diagnostic.open_float()
+    end)
+  end, { desc = "下一个诊断（自动打开悬浮窗口）" })
   vim.keymap.set("n", "go", function()
     vim.diagnostic.open_float()
   end)
@@ -1043,9 +1049,13 @@ local function setup_copilot_memory_limits()
   vim.g.copilot = vim.g.copilot or {}
 
   -- 内存限制相关配置
-  vim.g.copilot.filetypes = vim.g.copilot.filetypes or {
-    ["*"] = true,
-  }
+  -- 只允许在白名单文件类型中启动 Copilot
+  -- 不在 filetype_mappings 中的文件类型（如 codecompanion、NvimTree 等）不启动 Copilot
+  local copilot_filetypes = {}
+  for ft, _ in pairs(M.filetype_mappings) do
+    copilot_filetypes[ft] = true
+  end
+  vim.g.copilot.filetypes = vim.g.copilot.filetypes or copilot_filetypes
 
   -- 限制文件大小
   if M.config.copilot.limit_file_size then

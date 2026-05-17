@@ -105,8 +105,8 @@ local function _cmp_setup()
   })
 
   -- 命令行补全：释放 Tab 键给 cmp 使用，不让 Vim 内置的 wildmenu 拦截
-  vim.opt.wildcharm = vim.api.nvim_replace_termcodes("<C-z>", true, true, true)
-  vim.opt.wildchar = vim.api.nvim_replace_termcodes("<C-z>", true, true, true)
+  vim.opt.wildcharm = vim.api.nvim_replace_termcodes("<C-z>", true, true, true):byte()
+  vim.opt.wildchar = vim.api.nvim_replace_termcodes("<C-z>", true, true, true):byte()
 
   cmp.setup.cmdline({ "/", "?" }, {
     mapping = cmp.mapping.preset.cmdline(),
