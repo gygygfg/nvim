@@ -114,6 +114,11 @@ local function _cmp_setup()
   -- 加载 cmp-cmdline 插件（因为它是 opt 包）
   vim.cmd.packadd("cmp-cmdline")
 
+  -- 关键：把 wildchar 从默认 <Tab> 改为 <C-z>，释放 Tab 键给 cmp 管理
+  -- 否则 Vim 内置机制会在底层拦截 Tab，cmp 映射收不到按键
+  vim.opt.wildchar = 26  -- <C-z> 的 ASCII 码
+  vim.opt.wildcharm = 26
+
   local cmdline_mappings = cmp.mapping.preset.cmdline()
 
   -- 辅助函数：从命令行提取光标所在的单词
@@ -153,8 +158,8 @@ local function _cmp_setup()
         return
       end
     end
-    -- 回退：调用 fallback（Vim 内置处理，不会产生 ^I，因为 wildchar 保持为默认 <Tab>）
-    fallback()
+    -- 回退：发送 <C-z> 触发 Vim 内置 wildmenu（wildchar 已改为 <C-z>）
+    vim.fn.feedkeys(vim.api.nvim_replace_termcodes("<C-z>", true, true, true), "n")
   end, { "c" })
 
   cmp.setup.cmdline(":", {
