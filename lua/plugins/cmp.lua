@@ -131,9 +131,9 @@ local function _cmp_setup()
     end
 
     -- cmp 不可见时：尝试拼写自动纠正
-    local spell_ok, spell = pcall(require, "core.spell")
-    if spell_ok and spell.config and spell.config.auto_correct_on_tab then
-      if spell.auto_correct_current_word() then
+    local cmd_spell_ok, cmd_spell = pcall(require, "core.spell")
+    if cmd_spell_ok and cmd_spell.config and cmd_spell.config.auto_correct_on_tab then
+      if cmd_spell.auto_correct_current_word() then
         return
       end
     end
