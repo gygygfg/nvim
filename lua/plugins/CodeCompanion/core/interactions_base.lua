@@ -123,8 +123,8 @@ M.config = {
       ["command"] = {
         description = "更改用于启动 ACP 适配器的命令",
         callback = "interactions.chat.slash_commands.builtin.command",
-        ---@diagnostic disable-next-line: undefined-doc-name
         ---@param opts { adapter: CodeCompanion.HTTPAdapter|CodeCompanion.ACPAdapter }
+        ---@return boolean
         enabled = function(opts)
           if opts.adapter and opts.adapter.type == "acp" then
             return true
@@ -413,8 +413,8 @@ M.config = {
         description = "运行由 LLM 发起的 shell 命令",
         opts = {
           allowed_in_yolo_mode = false,
-          require_approval_before = false,
-          require_cmd_approval = true,
+          require_approval_before = true,
+          require_cmd_approval = false,
         },
       },
       ["web_search"] = {
