@@ -10,10 +10,59 @@ vim.pack.add({
 -- 局部变量，标记 godotdev 是否已加载
 local godotdev_loaded = false
 
+-- 将 gdscript 注册到主 LSP 系统，使其不被跳过
+-- godotdev.nvim 使用 vim.lsp.config["gdscript"] + vim.lsp.enable("gdscript") 启动 LSP，
+-- 服务名称为 "godot_editor"（见 godotdev/lsp.lua）
+-- 主 LSP 系统使用白名单(filetype_mappings)，gdscript 不在其中时会将缓冲区标记为
+-- lsp_started=true 并跳过，导致 LSP 按键映射和格式化等功能无法应用。
+local lsp_module_ok, lsp_module = pcall(require, "lsp")
+if lsp_module_ok then
+  -- 注册 gdscript 相关文件类型到 LSP 系统
+  lsp_module.filetype_mappings["gdscript"] = { "godot_editor" }
+  lsp_module.filetype_mappings["gdresource"] = { "godot_editor" }
+  lsp_module.filetype_mappings["gdshader"] = { "godot_editor" }
+
+  -- 添加 GDScript 格式化器
+  lsp_module.formatters_by_ft["gdscript"] = { "gdscript-formatter" }
+  lsp_module.formatters_by_ft["gdresource"] = { "gdscript-formatter" }
+  lsp_module.formatters_by_ft["gdshader"] = { "gdscript-formatter" }
+end
+
+-- 检测是否是 Godot 项目
+
 -- 检测是否是 Godot 项目
 local function is_godot_project()
   local root = vim.fs.root(0, { "project.godot" })
   return root ~= nil
+end
+
+-- 清除 gdscript 缓冲区的 lsp_started 标记，让主 LSP 系统可以正确附加
+-- 主 LSP 系统（lsp/init.lua）使用白名单机制，当 `start_lsp_for_filetype` 发现文件类型
+-- 不在 `filetype_mappings` 中时，会设置 `vim.b[bufnr].lsp_started = true` 并跳过。
+-- 由于 gdscript 已被我们注册到 filetype_mappings，该标记不会由 LSP 系统设置，
+-- 但为了兼容性，在 godotdev 加载后主动确保 gdscript 缓冲区的 LSP 正确附加。
+local function ensure_gdscript_lsp_attached()
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_is_loaded(bufnr) then
+      local ft = vim.bo[bufnr].filetype
+      if ft == "gdscript" or ft == "gdresource" or ft == "gdshader" then
+        -- 清除标记，让 LSP 系统可以处理此缓冲区
+        vim.b[bufnr].lsp_started = nil
+        -- 检查是否已有 godot_editor 客户端
+        local clients = vim.lsp.get_clients({ name = "godot_editor", bufnr = bufnr })
+        if #clients == 0 then
+          -- 尝试附加到已存在的 godot_editor 客户端
+          local all_clients = vim.lsp.get_clients({ name = "godot_editor" })
+          for _, client in ipairs(all_clients) do
+            if not vim.lsp.buf_is_attached(bufnr, client.id) then
+              vim.lsp.buf_attach_client(bufnr, client.id)
+              break
+            end
+          end
+        end
+      end
+    end
+  end
 end
 
 -- 加载并配置 godotdev.nvim
@@ -79,6 +128,10 @@ local function setup_godotdev()
   })
 
   godotdev_loaded = true
+
+  -- 确保所有打开的 gdscript 缓冲区正确附加 LSP
+  ensure_gdscript_lsp_attached()
+
   vim.notify("🚀 Godot 开发工具已加载", vim.log.levels.INFO)
 end
 
@@ -98,7 +151,25 @@ local function setup_godot_lsp()
   })
 end
 
--- 导出 Godot 项目为 HTML5 并启动本地服务（快速调试用）
+-- 从 export_presets.cfg 中解析所有可用的导出预设名
+local function get_export_presets(root)
+  local presets_file = root .. "/export_presets.cfg"
+  local f = io.open(presets_file, "r")
+  if not f then
+    return {}
+  end
+  local content = f:read("*a")
+  f:close()
+
+  local presets = {}
+  -- export_presets.cfg 格式: name="PresetName"
+  for name in content:gmatch('name%s*=%s*"([^"]+)"') do
+    table.insert(presets, name)
+  end
+  return presets
+end
+
+-- 获取 Godot 可执行文件路径
 local function get_godot_binary()
   local candidates = {
     "godot",
@@ -118,13 +189,71 @@ end
 -- 保存当前后台 job id，用于清理
 local web_jobs = {}
 
+-- 自动创建默认 Web 导出预设（内联，替代已删除的 GodotCreateWebExport 命令）
+local function create_web_export_preset(root)
+  local presets_file = root .. "/export_presets.cfg"
+  if vim.fn.filereadable(presets_file) == 1 then
+    return true
+  end
+
+  local content = [[
+[preset.0]
+
+name="Web"
+platform="Web"
+runnable=true
+dedicated_server=false
+custom_features=""
+export_filter="all_resources"
+include_filter=""
+exclude_filter=""
+export_path="build/web/index.html"
+encryption_include_filters=""
+encryption_exclude_filters=""
+
+[preset.0.options]
+
+custom_template/debug=""
+custom_template/release=""
+variant/extensions_support=false
+vram_compression/use_s3tc=true
+vram_compression/use_etc=false
+vram_compression/use_etc2=false
+vram_compression/use_bptc=true
+html/export_icon=true
+html/custom_html_shell=""
+html/head_include=""
+html/canvas_resize_policy=0
+progressive_web_app/enabled=false
+progressive_web_app/offline_page=""
+progressive_web_app/display=0
+progressive_web_app/orientation=0
+progressive_web_app/icon_144x144=""
+progressive_web_app/icon_180x180=""
+progressive_web_app/icon_512x512=""
+progressive_web_app/background_color=Color(0, 0, 0, 1)
+]]
+
+  local f = io.open(presets_file, "w")
+  if not f then
+    return false
+  end
+  f:write(content)
+  f:close()
+  return true
+end
+
 local function cleanup_web_jobs()
   for _, job_id in ipairs(web_jobs) do
-    vim.fn.jobstop(job_id)
+    local ok = pcall(vim.fn.jobstop, job_id)
+    if not ok then
+      pcall(vim.fn.jobstop, job_id)
+    end
   end
   web_jobs = {}
 end
 
+-- 导出 Godot 项目为 HTML5 并启动本地服务
 vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
   local root = vim.fs.root(0, { "project.godot", "export_presets.cfg" })
   if not root then
@@ -138,10 +267,70 @@ vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
     return
   end
 
+  -- 检查 export_presets.cfg 是否存在，不存在则自动创建
+  local presets_file = root .. "/export_presets.cfg"
+  local has_presets = vim.fn.filereadable(presets_file) == 1
+  if not has_presets then
+    vim.notify("未找到 export_presets.cfg，正在自动创建默认 Web 导出预设...", vim.log.levels.INFO)
+    local ok = create_web_export_preset(root)
+    if not ok then
+      vim.notify("自动创建导出预设失败", vim.log.levels.ERROR)
+      return
+    end
+    -- 重新读取预设
+    has_presets = vim.fn.filereadable(presets_file) == 1
+    if not has_presets then
+      vim.notify("创建导出预设失败", vim.log.levels.ERROR)
+      return
+    end
+    vim.notify("✅ 已自动创建 export_presets.cfg", vim.log.levels.INFO)
+  end
+
+  -- 获取可用的导出预设列表
+  local available_presets = get_export_presets(root)
+  if #available_presets == 0 then
+    vim.notify(
+      "export_presets.cfg 中未找到任何导出预设，正在自动创建 Web 预设...",
+      vim.log.levels.WARN
+    )
+    -- 备份当前文件
+    local backup = presets_file .. ".bak"
+    os.rename(presets_file, backup)
+    -- 重新创建
+    local ok = create_web_export_preset(root)
+    if not ok then
+      -- 恢复备份
+      os.rename(backup, presets_file)
+      vim.notify("自动创建 Web 预设失败", vim.log.levels.ERROR)
+      return
+    end
+    os.remove(backup)
+    available_presets = get_export_presets(root)
+    if #available_presets == 0 then
+      vim.notify("创建 Web 预设后仍无可用预设", vim.log.levels.ERROR)
+      return
+    end
+    vim.notify("✅ 已自动创建 Web 导出预设", vim.log.levels.INFO)
+  end
+
+  -- 确定使用哪个导出预设
+  local export_preset
+  if opts.args and opts.args ~= "" then
+    export_preset = opts.args
+  else
+    -- 自动选择 Web 相关的预设，或第一个
+    for _, p in ipairs(available_presets) do
+      if p:lower():find("web") or p:lower():find("html") then
+        export_preset = p
+        break
+      end
+    end
+    export_preset = export_preset or available_presets[1]
+  end
+
   -- 先清理之前的 job
   cleanup_web_jobs()
 
-  local export_mode = opts.args or "web"
   local export_path = root .. "/build/web/index.html"
   local server_port = 8080
 
@@ -174,36 +363,63 @@ vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
   })
   vim.api.nvim_win_set_option(win, "winhl", "NormalFloat:NormalFloat,FloatBorder:FloatBorder")
 
+  -- 去除 ANSI 转义序列
+  local function strip_ansi_codes(text)
+    return text:gsub("\027%[[%d;]*%a", "")
+  end
+
   local function append_output(text)
     vim.api.nvim_buf_set_option(buf, "modifiable", true)
-    local lines = vim.split(text, "\n", { plain = true })
+    local clean_text = strip_ansi_codes(text)
+    local lines = vim.split(clean_text, "\n", { plain = true })
     vim.api.nvim_buf_set_lines(buf, -1, -1, false, lines)
     vim.api.nvim_buf_set_option(buf, "modifiable", false)
     vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(buf), 0 })
   end
 
+  -- 构建导出命令
+  local cmd = { godot_bin, "--headless", "--export-debug", export_preset, export_path }
+
   append_output("🎮 正在导出 HTML5 项目...")
+  append_output("")
+  append_output(string.format("📂 项目路径: %s", root))
+  append_output(string.format("🔧 导出预设: %s", export_preset))
+  append_output(string.format("📦 导出路径: %s", export_path))
+  append_output(string.format("🏗️  执行命令: %s", table.concat(cmd, " ")))
   append_output("")
 
   -- 导出 job
-  local export_job = vim.fn.jobstart({ godot_bin, "--headless", "--export-debug", export_mode, export_path }, {
+  local export_job = vim.fn.jobstart(cmd, {
     cwd = root,
-    stdout_buffered = true,
-    stderr_buffered = true,
-    on_stdout = function(_, data)
+    stdout_buffered = false,
+    stderr_buffered = false,
+    on_stdout = function(_, data, _)
       if data then
-        append_output(table.concat(data, "\n"))
+        for _, line in ipairs(data) do
+          if line ~= "" then
+            append_output(line)
+          end
+        end
       end
     end,
-    on_stderr = function(_, data)
+    on_stderr = function(_, data, _)
       if data then
-        append_output("[stderr] " .. table.concat(data, "\n"))
+        for _, line in ipairs(data) do
+          if line ~= "" then
+            append_output("[stderr] " .. line)
+          end
+        end
       end
     end,
     on_exit = function(_, exit_code)
       if exit_code ~= 0 then
         append_output("")
         append_output("❌ Godot 导出失败，退出码: " .. exit_code)
+        append_output("")
+        append_output("💡 可能的原因：")
+        append_output("  1. 导出预设配置有误（删除 export_presets.cfg 后重试）")
+        append_output("  2. build/web/ 目录权限问题")
+        append_output("  3. Godot 引擎问题")
         return
       end
 
@@ -242,7 +458,7 @@ vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
 end, {
   nargs = "?",
   complete = "file",
-  desc = "导出 Godot 项目为 HTML5 并在终端窗口查看日志",
+  desc = "导出 Godot 项目为 HTML5 并启动本地 HTTP 服务",
 })
 
 -- 创建用户命令，手动加载 Godot 插件
@@ -279,12 +495,3 @@ vim.api.nvim_create_autocmd("VimEnter", {
     end
   end,
 })
-
--- 按键映射（可选，取消注释启用）
--- vim.keymap.set("n", "<leader>gr", function()
---   require("godotdev.run").run_project()
--- end, { desc = "运行 Godot 项目" })
---
--- vim.keymap.set("n", "<leader>gs", function()
---   require("godotdev.scene_tree").toggle()
--- end, { desc = "切换 Godot 场景树" })
