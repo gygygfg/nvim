@@ -443,7 +443,9 @@ vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
   vim.wo[win].winhl = "NormalFloat:NormalFloat,FloatBorder:FloatBorder"
 
   -- 按 q 或 <C-c> 关闭悬浮窗
+  -- 按 q 或 <C-c> 关闭悬浮窗
   local function close_float_win()
+    cleanup_web_jobs()
     if vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_win_close(win, true)
     end
