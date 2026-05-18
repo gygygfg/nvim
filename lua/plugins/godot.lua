@@ -102,8 +102,6 @@ local function get_godot_binary()
   return nil
 end
 
-
-
 -- 后台启动 Godot LSP 服务（如果端口未被占用）
 local godot_lsp_job_id = nil
 
@@ -277,8 +275,6 @@ local function get_export_presets(root)
   return presets
 end
 
-
-
 -- 保存当前后台 job id，用于清理
 local web_jobs = {}
 
@@ -420,9 +416,9 @@ vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
 
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_name(buf, "godot://export-web")
-  vim.api.nvim_buf_set_option(buf, "buftype", "acwrite")
-  vim.api.nvim_buf_set_option(buf, "filetype", "godot-export")
-  vim.api.nvim_buf_set_option(buf, "modifiable", false)
+  vim.bo[buf].buftype = "acwrite"
+  vim.bo[buf].filetype = "godot-export"
+  vim.bo[buf].modifiable = false
 
   vim.api.nvim_create_autocmd("BufWipeout", {
     buffer = buf,
@@ -443,18 +439,27 @@ vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
     title = " Godot Export Web ",
     title_pos = "center",
   })
-  vim.api.nvim_win_set_option(win, "winhl", "NormalFloat:NormalFloat,FloatBorder:FloatBorder")
+  vim.wo[win].winhl = "NormalFloat:NormalFloat,FloatBorder:FloatBorder"
+
+  -- 按 q 或 <C-c> 关闭悬浮窗
+  local function close_float_win()
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
+  end
+  vim.api.nvim_buf_set_keymap(buf, "n", "q", "", { callback = close_float_win, nowait = true, silent = true })
+  vim.api.nvim_buf_set_keymap(buf, "n", "<C-c>", "", { callback = close_float_win, nowait = true, silent = true })
 
   local function strip_ansi_codes(text)
     return text:gsub("\027%[[%d;]*%a", "")
   end
 
   local function append_output(text)
-    vim.api.nvim_buf_set_option(buf, "modifiable", true)
+    vim.bo[buf].modifiable = true
     local clean_text = strip_ansi_codes(text)
     local lines = vim.split(clean_text, "\n", { plain = true })
     vim.api.nvim_buf_set_lines(buf, -1, -1, false, lines)
-    vim.api.nvim_buf_set_option(buf, "modifiable", false)
+    vim.bo[buf].modifiable = false
     vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(buf), 0 })
   end
 
