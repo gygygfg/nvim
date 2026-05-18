@@ -29,7 +29,7 @@ if not success then
         get_enabled_servers = function()
           return {}
         end,
-        get_server_config = function()
+        get_server_config = function(_server_name)
           return nil
         end,
         discover_tools = function()
