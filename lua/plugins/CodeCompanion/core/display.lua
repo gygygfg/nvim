@@ -69,6 +69,7 @@ M.config = {
 
     ---显示令牌计数的函数
     ---@param tokens number
+    ---@diagnostic disable-next-line: undefined-doc-name
     ---@param adapter CodeCompanion.HTTPAdapter|CodeCompanion.ACPAdapter
     ---@return string
     token_count = function(tokens, adapter)
