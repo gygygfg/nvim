@@ -29,8 +29,6 @@ if lsp_module_ok then
 end
 
 -- 检测是否是 Godot 项目
-
--- 检测是否是 Godot 项目
 local function is_godot_project()
   local root = vim.fs.root(0, { "project.godot" })
   return root ~= nil
