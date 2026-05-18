@@ -227,7 +227,7 @@ end
 -- 获取动态工具组信息
 function M.get_dynamic_tool_groups_info()
   -- 尝试从 mcphub_integration 获取工具组配置
-  local success, mcphub_integration = pcall(require, "config.mcphub_integration")
+  local hub_ok, mcphub_integration = pcall(require, "config.mcphub_integration")
 
   if success and mcphub_integration.get_dynamic_tool_groups then
     local tool_groups = mcphub_integration.get_dynamic_tool_groups()
