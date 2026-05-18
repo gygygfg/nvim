@@ -969,14 +969,245 @@ M.view_scene_file = function(args, on_success, on_error)
 end
 
 -- ============================================================================
--- 工具注册
+-- 工具注册：供 NeoAI 工具系统调用
 -- ============================================================================
 
-local tools = {}
-for _, v in pairs(M) do
-  if type(v) == "table" and v.name and v.func then
-    table.insert(tools, v)
-  end
+--- 返回所有 Godot 工具定义列表
+--- @return table[] 工具定义列表，每项包含 name, func, description, parameters, category, async
+function M.get_tools()
+  return {
+    {
+      name = "list_scenes",
+      func = M.list_scenes,
+      description = "列出 Godot 项目中的场景文件（.tscn, .tres, .res），支持指定搜索路径",
+      parameters = {
+        type = "object",
+        properties = {
+          path = {
+            type = "string",
+            description = "项目路径（可选，默认当前工作目录）",
+          },
+        },
+      },
+      category = "godot",
+      async = true,
+    },
+    {
+      name = "get_scene_nodes",
+      func = M.get_scene_nodes,
+      description = "获取场景文件的节点列表，返回节点层级结构",
+      parameters = {
+        type = "object",
+        properties = {
+          filepath = {
+            type = "string",
+            description = "场景文件路径（必填）",
+          },
+        },
+        required = { "filepath" },
+      },
+      category = "godot",
+      async = true,
+    },
+    {
+      name = "get_scene_node",
+      func = M.get_scene_node,
+      description = "获取场景中指定节点的详细信息，支持按名称、路径或索引查找",
+      parameters = {
+        type = "object",
+        properties = {
+          filepath = {
+            type = "string",
+            description = "场景文件路径（必填）",
+          },
+          name = {
+            type = "string",
+            description = "节点名称（与 path、index 三选一）",
+          },
+          path = {
+            type = "string",
+            description = "节点路径，如 'root/child/grandchild'（与 name、index 三选一）",
+          },
+          index = {
+            type = "number",
+            description = "节点索引（从0开始，与 name、path 三选一）",
+          },
+        },
+        required = { "filepath" },
+      },
+      category = "godot",
+      async = true,
+    },
+    {
+      name = "add_scene_node",
+      func = M.add_scene_node,
+      description = "在场景中添加新节点",
+      parameters = {
+        type = "object",
+        properties = {
+          filepath = {
+            type = "string",
+            description = "场景文件路径（必填）",
+          },
+          name = {
+            type = "string",
+            description = "节点名称（必填）",
+          },
+          node_type = {
+            type = "string",
+            description = "节点类型，如 Node2D、Sprite2D、Button 等（必填）",
+          },
+          parent = {
+            type = "string",
+            description = "父节点名称（可选，默认添加到根节点）",
+          },
+          properties = {
+            type = "object",
+            description = "节点属性键值对（可选）",
+          },
+          instance = {
+            type = "string",
+            description = "实例化场景路径（可选）",
+          },
+          groups = {
+            type = "string",
+            description = "节点组（可选，逗号分隔）",
+          },
+        },
+        required = { "filepath", "name", "node_type" },
+      },
+      category = "godot",
+      async = true,
+    },
+    {
+      name = "set_node_properties",
+      func = M.set_node_properties,
+      description = "修改场景中已有节点的属性",
+      parameters = {
+        type = "object",
+        properties = {
+          filepath = {
+            type = "string",
+            description = "场景文件路径（必填）",
+          },
+          name = {
+            type = "string",
+            description = "节点名称（必填）",
+          },
+          properties = {
+            type = "object",
+            description = "要修改的属性键值对（必填）",
+          },
+          merge = {
+            type = "boolean",
+            description = "是否合并已有属性（true=合并，false=覆盖，默认 true）",
+          },
+        },
+        required = { "filepath", "name", "properties" },
+      },
+      category = "godot",
+      async = true,
+    },
+    {
+      name = "remove_scene_node",
+      func = M.remove_scene_node,
+      description = "从场景中删除指定节点",
+      parameters = {
+        type = "object",
+        properties = {
+          filepath = {
+            type = "string",
+            description = "场景文件路径（必填）",
+          },
+          name = {
+            type = "string",
+            description = "要删除的节点名称（必填）",
+          },
+        },
+        required = { "filepath", "name" },
+      },
+      category = "godot",
+      async = true,
+    },
+    {
+      name = "search_scene_nodes",
+      func = M.search_scene_nodes,
+      description = "在场景中搜索节点，支持按名称、类型、属性值模糊匹配",
+      parameters = {
+        type = "object",
+        properties = {
+          filepath = {
+            type = "string",
+            description = "场景文件路径（必填）",
+          },
+          name = {
+            type = "string",
+            description = "按名称搜索（可选）",
+          },
+          node_type = {
+            type = "string",
+            description = "按节点类型搜索（可选，如 Sprite2D）",
+          },
+          property = {
+            type = "string",
+            description = "按属性名搜索（可选）",
+          },
+          value = {
+            type = "string",
+            description = "按属性值搜索（可选，支持通配符）",
+          },
+          max_results = {
+            type = "number",
+            description = "最大返回数量（可选，默认50）",
+          },
+        },
+        required = { "filepath" },
+      },
+      category = "godot",
+      async = true,
+    },
+    {
+      name = "project_scene_tree",
+      func = M.project_scene_tree,
+      description = "列出 Godot 项目的完整文件结构，包括场景、脚本和资源文件",
+      parameters = {
+        type = "object",
+        properties = {
+          path = {
+            type = "string",
+            description = "项目路径（可选，默认当前工作目录）",
+          },
+          max_depth = {
+            type = "number",
+            description = "最大扫描深度（可选，默认3）",
+          },
+        },
+      },
+      category = "godot",
+      async = true,
+    },
+    {
+      name = "view_scene_file",
+      func = M.view_scene_file,
+      description = "查看场景文件的原始内容，包括头部信息、节点列表和层级结构",
+      parameters = {
+        type = "object",
+        properties = {
+          filepath = {
+            type = "string",
+            description = "场景文件路径（必填）",
+          },
+          properties = {
+            type = "boolean",
+            description = "是否包含节点属性详情（可选，默认 false）",
+          },
+        },
+        required = { "filepath" },
+      },
+      category = "godot",
+      async = true,
+    },
+  }
 end
 
 return M

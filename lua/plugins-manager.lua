@@ -86,17 +86,25 @@ function M.load_all_plugins()
     ::continue_file::
   end
 
-  -- 2. 然后加载特殊目录中的 init.lua
-  local special_dirs = { "git", "CodeCompanion" }
-  -- vim.notify("开始加载特殊目录模块...", vim.log.levels.DEBUG)
+  -- 2. 然后加载 plugins 目录下所有一级子文件夹中的 init.lua
+  -- 自动扫描所有子目录
+  local handle = vim.loop.fs_scandir(plugins_dir)
+  if handle then
+    while true do
+      local name, type = vim.loop.fs_scandir_next(handle)
+      if not name then break end
 
-  for _, dir_name in ipairs(special_dirs) do
-    local module_name = "plugins." .. dir_name
-    -- vim.notify("尝试加载目录模块: " .. module_name, vim.log.levels.DEBUG)
-    if load_module(module_name) then
-      loaded_count = loaded_count + 1
-    else
-      failed_count = failed_count + 1
+      if type == "directory" then
+        local init_path = plugins_dir .. "/" .. name .. "/init.lua"
+        if vim.fn.filereadable(init_path) == 1 then
+          local module_name = "plugins." .. name
+          if load_module(module_name) then
+            loaded_count = loaded_count + 1
+          else
+            failed_count = failed_count + 1
+          end
+        end
+      end
     end
   end
 
@@ -135,17 +143,24 @@ function M.list_available_plugins()
     end
   end
 
-  -- 添加特殊目录
-  local special_dirs = { "git", "CodeCompanion" }
-  for _, dir_name in ipairs(special_dirs) do
-    local init_path = plugins_dir .. "/" .. dir_name .. "/init.lua"
-    if vim.fn.filereadable(init_path) == 1 then
-      table.insert(plugins, {
-        name = "plugins." .. dir_name,
-        type = "dir",
-        path = init_path,
-      })
-      vim.notify("发现插件目录: plugins." .. dir_name, vim.log.levels.DEBUG)
+  -- 自动扫描所有子目录
+  local handle = vim.loop.fs_scandir(plugins_dir)
+  if handle then
+    while true do
+      local name, type = vim.loop.fs_scandir_next(handle)
+      if not name then break end
+
+      if type == "directory" then
+        local init_path = plugins_dir .. "/" .. name .. "/init.lua"
+        if vim.fn.filereadable(init_path) == 1 then
+          table.insert(plugins, {
+            name = "plugins." .. name,
+            type = "dir",
+            path = init_path,
+          })
+          vim.notify("发现插件目录: plugins." .. name, vim.log.levels.DEBUG)
+        end
+      end
     end
   end
 
