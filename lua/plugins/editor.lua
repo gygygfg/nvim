@@ -28,8 +28,8 @@ vim.api.nvim_create_autocmd("VimEnter", {
         },
         pre_hook = function(ctx)
           -- 使用 treesitter 获取正确的 commentstring
-          local ok, ts_context = pcall(require, "ts_context_commentstring.integrated")
-          if ok then
+          local ts_ok, ts_context = pcall(require, "ts_context_commentstring.integrated")
+          if ts_ok then
             local result = ts_context.calculate_commentstring()
             if result then
               return result
