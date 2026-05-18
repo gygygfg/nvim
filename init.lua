@@ -66,7 +66,8 @@ if spell_ok then
     auto_correct_on_tab = true,  -- 按 Tab 时自动纠正
     camel_case = true,
     max_suggestions = 5,
-    
+
+
     -- 文件类型配置
     enable_for = { "markdown", "text", "gitcommit", "latex", "tex", "rst" },
     disable_for = { "lua", "python", "javascript", "typescript", "java", "cpp", "c", "go", "rust" },
