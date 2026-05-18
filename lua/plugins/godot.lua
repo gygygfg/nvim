@@ -83,6 +83,7 @@ local function is_port_in_use(port)
     return false
   end
   return result ~= "" and not result:match("LISTEN")
+end
 
 -- 获取 Godot 可执行文件路径
 local function get_godot_binary()
