@@ -1,8 +1,8 @@
--- CodeCompanion 聊天显示模块
--- @diagnostic disable: undefined-doc-name
-
 local M = {}
 
+M.config = {
+  -- 动作面板配置
+  action_palette = {
     width = 95,
     height = 10,
     prompt = "提示 ", -- 交互式 LLM 调用使用的标题
