@@ -1,7 +1,8 @@
 -- CodeCompanion 交互策略配置 - 基础版本
 -- 文件：CodeCompanion/interactions_base.lua
 -- 只包含基本工具配置，不包含 MCP 工具
--- @diagnostic disable: undefined-doc-name, undefined-field
+---@diagnostic disable: undefined-doc-name, undefined-field
+
 
 local M = {}
 
