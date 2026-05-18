@@ -218,7 +218,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
         else
           message = message
             .. "（前3个）:\n"
-            .. table.concat({ unpack(changes, 1, 3) }, "\n")
+            .. table.concat({ table.unpack(changes, 1, 3) }, "\n")
             .. "\n... 还有 "
             .. (change_count - 3)
             .. " 个文件"
