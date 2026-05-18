@@ -192,8 +192,8 @@ function M.test_all_mcp_servers()
   local tested_count = 0
 
   for name, _ in pairs(servers) do
-    local success = M.test_mcp_server(name)
-    if success then
+    local server_ok = M.test_mcp_server(name)
+    if server_ok then
       tested_count = tested_count + 1
     end
     -- 添加延迟以避免同时启动多个服务器
