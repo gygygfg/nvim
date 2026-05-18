@@ -60,9 +60,9 @@ local function _cmp_setup()
         end
 
         -- 优先尝试拼写自动纠正（在 cmp 可见之前，因为 typo 时补全内容也是错的）
-        local spell_ok, spell = pcall(require, "core.spell")
-        if spell_ok and spell.config and spell.config.auto_correct_on_tab and has_words_before() then
-          if spell.auto_correct_current_word() then
+        local tab_spell_ok, tab_spell = pcall(require, "core.spell")
+        if tab_spell_ok and tab_spell.config and tab_spell.config.auto_correct_on_tab and has_words_before() then
+          if tab_spell.auto_correct_current_word() then
             return
           end
         end
