@@ -368,9 +368,9 @@ function M.show_mcp_usage_help()
     title_pos = "center",
   })
 
-  vim.api.nvim_buf_set_option(buf, "filetype", "markdown")
-  vim.api.nvim_buf_set_option(buf, "modifiable", false)
-  vim.api.nvim_buf_set_option(buf, "readonly", true)
+  vim.bo[buf].filetype = "markdown"
+  vim.bo[buf].modifiable = false
+  vim.bo[buf].readonly = true
 
   -- 设置按键映射
   vim.api.nvim_buf_set_keymap(buf, "n", "q", "<cmd>q<CR>", { noremap = true, silent = true })
