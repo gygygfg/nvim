@@ -83,7 +83,25 @@ local function is_port_in_use(port)
     return false
   end
   return result ~= "" and not result:match("LISTEN")
+
+-- 获取 Godot 可执行文件路径
+local function get_godot_binary()
+  local candidates = {
+    "godot",
+    "godot4",
+    "Godot",
+    "Godot_v4.3-stable_x11.64",
+    vim.fn.expand("~/Godot/Godot_v4.3-stable_x11.64"),
+  }
+  for _, bin in ipairs(candidates) do
+    if vim.fn.executable(bin) == 1 then
+      return bin
+    end
+  end
+  return nil
 end
+
+
 
 -- 后台启动 Godot LSP 服务（如果端口未被占用）
 local godot_lsp_job_id = nil
