@@ -123,8 +123,8 @@ M.config = {
       ["command"] = {
         description = "更改用于启动 ACP 适配器的命令",
         callback = "interactions.chat.slash_commands.builtin.command",
+        ---@diagnostic disable-next-line: undefined-doc-name
         ---@param opts { adapter: CodeCompanion.HTTPAdapter|CodeCompanion.ACPAdapter }
-        ---@return boolean
         enabled = function(opts)
           if opts.adapter and opts.adapter.type == "acp" then
             return true
