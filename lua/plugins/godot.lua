@@ -470,7 +470,7 @@ vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
     vim.bo[buf].modifiable = false
     vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(buf), 0 })
   end
-  end
+
 
   local cmd = { godot_bin, "--headless", "--export-debug", export_preset, export_path }
 
