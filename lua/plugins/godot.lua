@@ -416,9 +416,10 @@ vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
 
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_name(buf, "godot://export-web")
-  vim.bo[buf].buftype = "acwrite"
+  vim.bo[buf].buftype = "nofile"
   vim.bo[buf].filetype = "godot-export"
   vim.bo[buf].modifiable = false
+  vim.bo[buf].modified = false
 
   vim.api.nvim_create_autocmd("BufWipeout", {
     buffer = buf,
@@ -446,6 +447,10 @@ vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
     if vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_win_close(win, true)
     end
+    if vim.api.nvim_buf_is_valid(buf) then
+      vim.bo[buf].modified = false
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end
   end
   vim.api.nvim_buf_set_keymap(buf, "n", "q", "", { callback = close_float_win, nowait = true, silent = true })
   vim.api.nvim_buf_set_keymap(buf, "n", "<C-c>", "", { callback = close_float_win, nowait = true, silent = true })
@@ -455,12 +460,16 @@ vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
   end
 
   local function append_output(text)
+    if not vim.api.nvim_buf_is_valid(buf) then
+      return
+    end
     vim.bo[buf].modifiable = true
     local clean_text = strip_ansi_codes(text)
     local lines = vim.split(clean_text, "\n", { plain = true })
     vim.api.nvim_buf_set_lines(buf, -1, -1, false, lines)
     vim.bo[buf].modifiable = false
     vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(buf), 0 })
+  end
   end
 
   local cmd = { godot_bin, "--headless", "--export-debug", export_preset, export_path }
