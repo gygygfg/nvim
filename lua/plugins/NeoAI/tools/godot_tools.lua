@@ -5,7 +5,7 @@
 -- 工具函数签名：func(args, on_success, on_error)
 local M = {}
 
-local resolve_path = require("NeoAI.tools.builtin.tool_helpers").resolve_path
+
 
 -- ============================================================================
 -- 内部辅助函数
@@ -349,7 +349,7 @@ M.list_scenes = function(args, on_success, on_error)
     return
   end
 
-  local project_path = args.path and resolve_path(args.path) or vim.fn.getcwd()
+  local project_path = args.path or vim.fn.getcwd()
 
   find_project_root(project_path, function(root_path)
     local results = {}
@@ -364,7 +364,7 @@ M.list_scenes = function(args, on_success, on_error)
         if not name then break end
         local full_path = dir .. "/" .. name
         if type == "directory" then
-          if name ~= "." and name ~= ".." and name ~= ".godot" and name ~= "addons" then
+          if name ~= "." and name ~= ".." and name ~= ".godot" and name ~= "addons" and name ~= "build" then
             scan_dir(full_path, depth + 1, max_depth)
           end
         elseif type == "file" then
@@ -402,7 +402,7 @@ M.get_scene_nodes = function(args, on_success, on_error)
     return
   end
 
-  local filepath = resolve_path(args.filepath)
+  local filepath = args.filepath
   local abs_path = vim.fn.fnamemodify(filepath, ":p")
 
   read_file_async(abs_path, function(content)
@@ -429,7 +429,7 @@ M.get_scene_node = function(args, on_success, on_error)
     return
   end
 
-  local filepath = resolve_path(args.filepath)
+  local filepath = args.filepath
   local node_name = args.name
   local node_path = args.path
   local node_index = args.index
@@ -500,7 +500,7 @@ M.add_scene_node = function(args, on_success, on_error)
     return
   end
 
-  local filepath = resolve_path(args.filepath)
+  local filepath = args.filepath
   local new_node = {
     name = args.name,
     node_type = args.node_type,
@@ -591,7 +591,7 @@ M.set_node_properties = function(args, on_success, on_error)
     return
   end
 
-  local filepath = resolve_path(args.filepath)
+  local filepath = args.filepath
   local target_name = args.name
   local new_properties = args.properties
   local merge = args.merge
@@ -697,7 +697,7 @@ M.remove_scene_node = function(args, on_success, on_error)
     return
   end
 
-  local filepath = resolve_path(args.filepath)
+  local filepath = args.filepath
   local target_name = args.name
   local remove_children = args.children
 
@@ -801,7 +801,7 @@ M.search_scene_nodes = function(args, on_success, on_error)
     return
   end
 
-  local filepath = resolve_path(args.filepath)
+  local filepath = args.filepath
   local search_type = args.node_type
   local search_name = args.name
   local search_prop = args.property
@@ -879,7 +879,7 @@ M.project_scene_tree = function(args, on_success, on_error)
     return
   end
 
-  local project_path = args.path and resolve_path(args.path) or vim.fn.getcwd()
+  local project_path = args.path or vim.fn.getcwd()
 
   find_project_root(project_path, function(root_path)
     local max_depth = args.max_depth or 3
@@ -895,7 +895,7 @@ M.project_scene_tree = function(args, on_success, on_error)
         if not name then break end
         local full_path = dir .. "/" .. name
         if type == "directory" then
-          if name ~= "." and name ~= ".." and name ~= ".godot" then
+          if name ~= "." and name ~= ".." and name ~= ".godot" and name ~= "build" then
             scan_dir(full_path, depth + 1, max_depth)
           end
         elseif type == "file" then
@@ -947,7 +947,7 @@ M.view_scene_file = function(args, on_success, on_error)
     return
   end
 
-  local filepath = resolve_path(args.filepath)
+  local filepath = args.filepath
   local show_properties = args.properties
 
   local abs_path = vim.fn.fnamemodify(filepath, ":p")
@@ -975,6 +975,12 @@ end
 --- 返回所有 Godot 工具定义列表
 --- @return table[] 工具定义列表，每项包含 name, func, description, parameters, category, async
 function M.get_tools()
+  -- 检查是否在 Godot 项目中，如果不在则返回空列表
+  local root = vim.fs.root(0, { "project.godot" })
+  if not root then
+    return {}
+  end
+
   return {
     {
       name = "list_scenes",

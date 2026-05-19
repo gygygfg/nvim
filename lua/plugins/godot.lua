@@ -332,6 +332,114 @@ progressive_web_app/background_color=Color(0, 0, 0, 1)
   return true
 end
 
+-- 在导出的 index.html 中注入 console 日志拦截器
+-- 让游戏运行时 print() 输出能通过 POST /log 发送回日志服务器
+local function inject_console_logger(html_path)
+  if vim.fn.filereadable(html_path) ~= 1 then
+    return false
+  end
+
+  local f = io.open(html_path, "r")
+  if not f then
+    return false
+  end
+  local content = f:read("*a")
+  f:close()
+
+  -- 检查是否已经注入过（避免重复注入）
+  if content:find("godot-console-logger") then
+    return true
+  end
+
+  -- 要注入的 JS 代码：拦截 console 方法，通过 fetch 发送到 /log 端点
+  local inject_script = [[
+<script id="godot-console-logger">
+// Godot Console Logger — 将游戏运行时 print() 日志发送到 Neovim 悬浮窗
+(function() {
+  var LOG_SERVER = '/log';
+  var originalMethods = {};
+
+  // 保存原始方法
+  ['log', 'warn', 'error', 'info', 'debug'].forEach(function(level) {
+    originalMethods[level] = console[level];
+  });
+
+  // 重写 console 方法
+  function sendLog(level, args) {
+    try {
+      var msg = Array.prototype.map.call(args, function(arg) {
+        if (typeof arg === 'object') {
+          try { return JSON.stringify(arg); } catch(e) { return String(arg); }
+        }
+        return String(arg);
+      }).join(' ');
+      
+      // 发送到日志服务器（使用 sendBeacon 或 fetch，避免阻塞游戏）
+      var payload = JSON.stringify({ level: level, message: msg });
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(LOG_SERVER, payload);
+      } else {
+        fetch(LOG_SERVER, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true
+        }).catch(function() {});
+      }
+    } catch(e) {
+      // 日志发送失败时回退到原始 console
+      originalMethods['error']('[Godot Logger] 发送日志失败:', e);
+    }
+  }
+
+  // 重写 console 方法
+  ['log', 'warn', 'error', 'info', 'debug'].forEach(function(level) {
+    console[level] = function() {
+      // 调用原始方法（保持浏览器控制台也有输出）
+      originalMethods[level].apply(console, arguments);
+      // 发送到日志服务器
+      sendLog(level, arguments);
+    };
+  });
+
+  // 也捕获未处理的错误
+  window.addEventListener('error', function(e) {
+    sendLog('error', ['Uncaught:', e.message, 'at', e.filename + ':' + e.lineno]);
+  });
+
+  // 捕获 Promise 未处理拒绝
+  window.addEventListener('unhandledrejection', function(e) {
+    sendLog('warn', ['Unhandled Promise:', e.reason]);
+  });
+
+  console.log('[Godot Logger] ✅ 控制台日志拦截已启用，print() 输出将发送到 Neovim 悬浮窗');
+})();
+</script>
+]]
+
+  -- 在 </head> 标签前注入（或者在 </body> 前作为备选）
+  local modified
+  if content:find("</head>") then
+    modified = content:gsub("</head>", inject_script .. "\n</head>", 1)
+  elseif content:find("</body>") then
+    modified = content:gsub("</body>", inject_script .. "\n</body>", 1)
+  elseif content:find("</html>") then
+    modified = content:gsub("</html>", inject_script .. "\n</html>", 1)
+  else
+    -- 最后手段：追加到文件末尾
+    modified = content .. "\n" .. inject_script
+  end
+
+  f = io.open(html_path, "w")
+  if not f then
+    return false
+  end
+  f:write(modified)
+  f:close()
+  return true
+end
+
+-- 保存当前后台 job id，用于清理
 local function cleanup_web_jobs()
   for _, job_id in ipairs(web_jobs) do
     local ok = pcall(vim.fn.jobstop, job_id)
@@ -411,6 +519,13 @@ vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
 
   cleanup_web_jobs()
 
+  -- 自动创建导出目录（防止 Godot 因目录不存在而报错）
+  local export_dir = root .. "/build/web"
+  if vim.fn.isdirectory(export_dir) == 0 then
+    vim.fn.mkdir(export_dir, "p")
+    append_output(string.format("📁 自动创建导出目录: %s", export_dir))
+  end
+
   local export_path = root .. "/build/web/index.html"
   local server_port = 8080
 
@@ -442,7 +557,6 @@ vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
   })
   vim.wo[win].winhl = "NormalFloat:NormalFloat,FloatBorder:FloatBorder"
 
-
   -- 按 q 或 <C-c> 关闭悬浮窗
   local function close_float_win()
     cleanup_web_jobs()
@@ -472,7 +586,6 @@ vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
     vim.bo[buf].modifiable = false
     vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(buf), 0 })
   end
-
 
   local cmd = { godot_bin, "--headless", "--export-debug", export_preset, export_path }
 
@@ -519,33 +632,58 @@ vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
       end
 
       append_output("")
-      append_output("✅ 导出成功！启动 HTTP 服务...")
+      append_output("✅ 导出成功！注入日志拦截器到 index.html...")
 
-      local server_job = vim.fn.jobstart({ "npx", "http-server", ".", "-p", tostring(server_port), "-c-1", "--cors" }, {
-        cwd = root .. "/build/web",
-        stdout_buffered = true,
-        stderr_buffered = true,
-        on_stdout = function(_, data)
-          if data then
-            append_output(table.concat(data, "\n"))
-          end
-        end,
-        on_stderr = function(_, data)
-          if data then
-            append_output("[stderr] " .. table.concat(data, "\n"))
-          end
-        end,
-        on_exit = function(_, code)
-          append_output("")
-          append_output("🛑 HTTP 服务已退出 (code=" .. code .. ")")
-        end,
-      })
+      -- 注入 console 日志拦截 JS
+      local log_server_script = vim.fn.stdpath("config") .. "/scripts/godot-log-server.js"
+      local inject_ok = inject_console_logger(export_path)
+      if inject_ok then
+        append_output("✅ 已注入日志拦截器，游戏 print() 将显示在此窗口")
+      else
+        append_output("⚠️ 日志拦截器注入失败（可能是文件已被修改）")
+      end
+
+      append_output("")
+      append_output("🚀 启动自定义日志服务器（替代 http-server）...")
+
+      -- 使用自定义日志服务器（替代 http-server），同时接收游戏运行时日志
+      local server_job = vim.fn.jobstart(
+        { "node", log_server_script, root .. "/build/web", tostring(server_port) },
+        {
+          cwd = root .. "/build/web",
+          stdout_buffered = false,
+          stderr_buffered = false,
+          on_stdout = function(_, data)
+            if data then
+              for _, line in ipairs(data) do
+                if line ~= "" then
+                  append_output(line)
+                end
+              end
+            end
+          end,
+          on_stderr = function(_, data)
+            if data then
+              for _, line in ipairs(data) do
+                if line ~= "" then
+                  append_output("[stderr] " .. line)
+                end
+              end
+            end
+          end,
+          on_exit = function(_, code)
+            append_output("")
+            append_output("🛑 日志服务已退出 (code=" .. code .. ")")
+          end,
+        }
+      )
       table.insert(web_jobs, server_job)
 
       append_output("")
       append_output(string.format("🌐 http://localhost:%d", server_port))
       append_output("")
       append_output("💡 关闭此窗口可自动停止所有服务")
+      append_output("💡 游戏在浏览器中运行时，print() 日志会自动显示在此窗口")
     end,
   })
   table.insert(web_jobs, export_job)
@@ -555,11 +693,276 @@ end, {
   desc = "导出 Godot 项目为 HTML5 并启动本地 HTTP 服务",
 })
 
--- 创建用户命令，手动加载 Godot 插件
-vim.api.nvim_create_user_command("LoadGodot", function()
-  setup_godotdev()
-  vim.notify("Godot 插件已手动加载", vim.log.levels.INFO)
-end, {})
+-- ============================================================
+-- GodotInit: 一键初始化 Godot 项目基础框架
+-- ============================================================
+-- 基础框架包含：
+--   project.godot            — 项目配置（含 Web 导出友好设置）
+  --   Main.gd                  — 入口脚本（含 fonts/ 目录下的 OTF 字体加载）
+--   Main.tscn                — 入口场景（CanvasLayer + Label）
+--   export_presets.cfg       — Web 导出预设
+--   icon.svg                 — 默认图标
+  --   fonts/SourceHanSansHWSC-Regular.otf — 思源黑体等宽中文字体（从 fonts 目录解压）
+--
+-- 依赖文件：
+--   /mnt/f6c8858d-4d92-4d0b-bf2f-e485fa194660/fonts/14_SourceHanSansHWSC.zip
+--   解压后提供 SourceHanSansHWSC-Regular.otf 和 SourceHanSansHWSC-Bold.otf
+-- ============================================================
+vim.api.nvim_create_user_command("GodotInit", function(opts)
+  local project_name = opts.args
+  if project_name == nil or project_name == "" then
+    project_name = vim.fn.fnamemodify(vim.fn.getcwd(), ":t")
+    if project_name == "" or project_name == "/" then
+      vim.notify("请指定项目名称: GodotInit 项目名", vim.log.levels.ERROR)
+      return
+    end
+    vim.notify("未指定名称，使用当前目录: " .. project_name, vim.log.levels.INFO)
+  end
+
+  -- 目标目录：当前工作目录 或 新建子目录
+  local target_dir
+  if opts.args and opts.args ~= "" then
+    target_dir = vim.fn.getcwd() .. "/" .. project_name
+    if vim.fn.isdirectory(target_dir) == 0 then
+      vim.fn.mkdir(target_dir, "p")
+      vim.notify("创建项目目录: " .. target_dir, vim.log.levels.INFO)
+    end
+  else
+    target_dir = vim.fn.getcwd()
+  end
+
+  -- 检查目标目录是否已有 project.godot
+  local proj_file = target_dir .. "/project.godot"
+  if vim.fn.filereadable(proj_file) == 1 then
+    vim.notify("目录中已存在 project.godot，跳过初始化（避免覆盖）", vim.log.levels.WARN)
+    return
+  end
+
+  local font_zip = "/mnt/f6c8858d-4d92-4d0b-bf2f-e485fa194660/fonts/14_SourceHanSansHWSC.zip"
+  local stats = vim.uv.fs_stat(font_zip)
+  if not stats then
+    vim.notify("字体文件未找到: " .. font_zip, vim.log.levels.ERROR)
+    return
+  end
+
+  -- 生成随机 UID（Godot 场景格式）
+  local function gen_uid()
+    local chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+    local uid = ""
+    for _ = 1, 12 do
+      uid = uid .. chars:sub(math.random(1, #chars), math.random(1, #chars))
+    end
+    return "uid://" .. uid
+  end
+
+  local scene_uid = gen_uid()
+  math.randomseed(os.time())
+
+  -- ========== 1. project.godot ==========
+  local project_godot = string.format([[
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[application]
+
+config/name="%s"
+run/main_scene="res://Main.tscn"
+config/features=PackedStringArray("4.5", "Forward Plus")
+config/icon="res://icon.svg"
+
+[display]
+
+window/size/viewport_width=960
+window/size/viewport_height=640
+window/size/mode=0
+window/size/resizable=true
+window/stretch/mode="canvas_items"
+window/stretch/aspect="keep"
+
+[rendering]
+
+renderer/rendering_method="mobile"
+]], project_name)
+
+  -- ========== 2. Main.gd ==========
+  local main_gd = [[extends Node2D
+
+# ============================================================
+# 项目入口脚本
+# 字体: SourceHanSansHWSC-Regular.otf（思源黑体等宽简体中文）
+# 所有平台（含 Web）统一使用 OTF 字体文件渲染中文
+# ============================================================
+
+# --- 字体 ---
+var game_font: Font
+
+@onready var label: Label = $UI/Label
+
+func _ready() -> void:
+	# 直接 load 让 Godot 导入管线自动处理 OTF → FontFile
+	game_font = load("res://fonts/SourceHanSansHWSC-Regular.otf")
+	if game_font == null:
+		push_error("无法加载字体！回退到系统 sans-serif")
+		game_font = SystemFont.new()
+		game_font.font_names = PackedStringArray(["sans-serif"])
+	game_font.allow_system_fallback = true
+
+	_apply_fonts()
+	label.text = "Hello Godot!"
+
+func _apply_fonts() -> void:
+	var font_size := maxi(14, int(get_viewport_rect().size.y * 0.04))
+	label.add_theme_font_override(&"font", game_font)
+	label.add_theme_font_size_override(&"font_size", font_size)
+]]
+
+  -- ========== 3. Main.tscn ==========
+  local main_tscn = string.format([[
+[gd_scene load_steps=2 format=3 uid="%s"]
+
+[ext_resource type="Script" path="res://Main.gd" id="1_main"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="Label" type="Label" parent="UI"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -20.0
+offset_right = 200.0
+offset_bottom = 20.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+horizontal_alignment = 1
+vertical_alignment = 1
+text = ""
+]], scene_uid)
+
+  -- ========== 4. export_presets.cfg ==========
+  local export_presets = [[
+[preset.0]
+
+name="Web"
+platform="Web"
+runnable=true
+dedicated_server=false
+custom_features=""
+export_filter="all_resources"
+include_filter=""
+exclude_filter=""
+export_path="build/web/index.html"
+encryption_include_filters=""
+encryption_exclude_filters=""
+
+[preset.0.options]
+
+custom_template/debug=""
+custom_template/release=""
+variant/extensions_support=false
+vram_compression/use_s3tc=true
+vram_compression/use_etc=false
+vram_compression/use_etc2=false
+vram_compression/use_bptc=true
+html/export_icon=true
+html/custom_html_shell=""
+html/head_include=""
+html/canvas_resize_policy=2
+progressive_web_app/enabled=false
+progressive_web_app/offline_page=""
+progressive_web_app/display=0
+progressive_web_app/orientation=0
+progressive_web_app/icon_144x144=""
+progressive_web_app/icon_180x180=""
+progressive_web_app/icon_512x512=""
+progressive_web_app/background_color=Color(0, 0, 0, 1)
+]]
+
+  -- ========== 5. icon.svg ==========
+  local icon_svg = [[
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="24" fill="#478cbf"/>
+  <rect x="8" y="8" width="112" height="112" rx="18" fill="#355d8a"/>
+  <text x="64" y="88" text-anchor="middle"
+        font-size="72" font-weight="bold"
+        font-family="sans-serif" fill="#ffffff">G</text>
+</svg>
+]]
+
+  -- ========== 写入文件 ==========
+  local files = {
+    { path = target_dir .. "/project.godot",       content = project_godot },
+    { path = target_dir .. "/Main.gd",             content = main_gd },
+    { path = target_dir .. "/Main.tscn",           content = main_tscn },
+    { path = target_dir .. "/export_presets.cfg",  content = export_presets },
+    { path = target_dir .. "/icon.svg",            content = icon_svg },
+  }
+
+  for _, file in ipairs(files) do
+    local f, err = io.open(file.path, "w")
+    if not f then
+      vim.notify("写入失败: " .. file.path .. " (" .. err .. ")", vim.log.levels.ERROR)
+      return
+    end
+    f:write(file.content)
+    f:close()
+    vim.notify("✅ " .. vim.fn.fnamemodify(file.path, ":t"), vim.log.levels.INFO)
+  end
+
+  -- ========== 创建导出目录 ==========
+  local export_dir = target_dir .. "/build/web"
+  if vim.fn.isdirectory(export_dir) == 0 then
+    vim.fn.mkdir(export_dir, "p")
+    vim.notify("✅ build/web/ (导出目录)", vim.log.levels.INFO)
+  end
+
+  -- ========== 创建 fonts 目录并解压字体 ==========
+  local fonts_dir = target_dir .. "/fonts"
+  if vim.fn.isdirectory(fonts_dir) == 0 then
+    vim.fn.mkdir(fonts_dir, "p")
+  end
+  vim.notify("⏳ 正在解压字体到 fonts/ ...", vim.log.levels.INFO)
+  local unzip_cmd = { "unzip", "-o", "-j", font_zip, "-d", fonts_dir }
+  local unzip_output = vim.fn.system(unzip_cmd)
+  local unzip_rc = vim.v.shell_error
+  if unzip_rc ~= 0 then
+    vim.notify("解压字体失败: " .. unzip_output, vim.log.levels.ERROR)
+    return
+  end
+  vim.notify("✅ fonts/SourceHanSansHWSC-Regular.otf", vim.log.levels.INFO)
+  vim.notify("✅ fonts/SourceHanSansHWSC-Bold.otf", vim.log.levels.INFO)
+
+  -- 刷新文件浏览器
+  vim.cmd("silent! Lexplore")
+
+  vim.notify("", vim.log.levels.INFO)
+  vim.notify("🎉 Godot 项目初始化完成！", vim.log.levels.INFO)
+  vim.notify("📂 " .. target_dir, vim.log.levels.INFO)
+  vim.notify("", vim.log.levels.INFO)
+  vim.notify("项目结构:", vim.log.levels.INFO)
+  vim.notify("  fonts/                      — 字体目录", vim.log.levels.INFO)
+  vim.notify("  fonts/SourceHanSansHWSC-*.otf — 思源黑体等宽中文字体", vim.log.levels.INFO)
+  vim.notify("  Main.tscn               — 入口场景（CanvasLayer + Label）", vim.log.levels.INFO)
+  vim.notify("  export_presets.cfg      — Web 导出预设", vim.log.levels.INFO)
+  vim.notify("  icon.svg                — 默认图标", vim.log.levels.INFO)
+
+end, {
+  nargs = "?",
+  desc = "初始化 Godot 项目基础框架（含中文字体、Web导出预设）",
+})
 
 -- 方案一：打开 Godot 相关文件时自动加载
 vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
