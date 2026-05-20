@@ -2234,6 +2234,14 @@ function M.setup_mason()
           M._server_configs = {}
         end
         M._server_configs[server_name] = lsp_config
+
+        -- 注册到 Neovim 内置的 vim.lsp.config 系统，消除 "config not found" 警告
+        local lsp_config_for_reg = vim.deepcopy(lsp_config)
+        lsp_config_for_reg.name = nil -- name 由第一个参数指定
+        local ok, err = pcall(vim.lsp.config, server_name, lsp_config_for_reg)
+        if not ok and vim.g.lsp_debug then
+          vim.notify("[LSP] [LSP] vim.lsp.config 注册失败 [" .. server_name .. "]: " .. tostring(err))
+        end
       end
     end
 
@@ -3851,27 +3859,47 @@ vim.api.nvim_create_user_command("LspRestartAll", function()
   -- 重启所有 LSP 进程
   vim.notify("[LSP] === 重启所有 LSP 进程 ===")
 
-  -- 获取所有进程
-  local processes = get_all_lsp_processes()
-
-  if #processes == 0 then
-    vim.notify("[LSP] 没有找到 LSP 进程")
-    return
+  -- ============================================
+  -- 第 1 步：正确停止所有 LSP 客户端
+  -- （不能只 kill OS 进程，Neovim 的 LSP client 对象需要正确清理）
+  -- ============================================
+  local all_clients = vim.lsp.get_clients()
+  if #all_clients > 0 then
+    vim.notify("[LSP] 正在停止 " .. #all_clients .. " 个 LSP 客户端...")
+    for _, client in ipairs(all_clients) do
+      pcall(vim.lsp.stop_client, client.id)
+    end
+    vim.notify("[LSP] 所有 LSP 客户端已停止")
   end
 
-  vim.notify("[LSP] 找到 " .. #processes .. " 个 LSP 进程，正在重启...")
-
-  -- 记录需要重启的服务器
-  local servers_to_restart = {}
-
-  -- 终止所有进程
-  for _, proc in ipairs(processes) do
-    if proc.type == "lsp" then
-      servers_to_restart[proc.server_name] = true
+  -- ============================================
+  -- 第 2 步：停止 Godot LSP 后台服务
+  -- （godot --headless --lsp-port 6005 是这个独立的后台进程）
+  -- ============================================
+  local godot_module_ok, godot_module = pcall(require, "plugins.godot")
+  local is_godot = false
+  if godot_module_ok and godot_module and godot_module.stop_godot_lsp_server then
+    -- 先检查是否在 Godot 项目中
+    if godot_module.is_godot_project and godot_module.is_godot_project() then
+      is_godot = true
+      vim.notify("[LSP] 正在停止 Godot LSP 后台服务...")
+      godot_module.stop_godot_lsp_server()
+      -- 重置 godotdev 加载标记，以便后续重新加载
+      if godot_module.reset_loaded then
+        godot_module.reset_loaded()
+      end
     end
+  end
 
-    -- 优雅终止
-    os.execute("kill -15 " .. proc.pid .. " 2>/dev/null")
+  -- ============================================
+  -- 第 3 步：清理残留的 OS 进程
+  -- ============================================
+  local processes = get_all_lsp_processes()
+  if #processes > 0 then
+    vim.notify("[LSP] 清理 " .. #processes .. " 个残留 LSP 进程...")
+    for _, proc in ipairs(processes) do
+      os.execute("kill -15 " .. proc.pid .. " 2>/dev/null")
+    end
   end
 
   -- 等待 2 秒让进程退出
@@ -3882,8 +3910,6 @@ vim.api.nvim_create_user_command("LspRestartAll", function()
       os.execute("kill -9 " .. proc.pid .. " 2>/dev/null")
     end
 
-    vim.notify("[LSP] 所有 LSP 进程已终止")
-
     -- 清除缓冲区标记
     for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
       if vim.api.nvim_buf_is_valid(bufnr) then
@@ -3891,7 +3917,52 @@ vim.api.nvim_create_user_command("LspRestartAll", function()
       end
     end
 
-    -- 重新启动当前文件的 LSP
+    vim.notify("[LSP] 所有 LSP 进程已终止，缓冲区标记已清除")
+
+    -- ============================================
+    -- 第 4 步：如果在 Godot 项目中，重启后台服务
+    -- ============================================
+    if is_godot then
+      vim.notify("[LSP] 正在重启 Godot LSP 后台服务...")
+      local godot_ok, godot_mod = pcall(require, "plugins.godot")
+      if godot_ok and godot_mod and godot_mod.start_godot_lsp_server then
+        local started = godot_mod.start_godot_lsp_server()
+        if started then
+          vim.notify("[LSP] Godot LSP 后台服务已重启，等待端口就绪...")
+          -- 等待端口就绪后设置 LSP 客户端
+          local retry_count = 0
+          local function wait_and_setup()
+            if godot_mod.is_port_in_use(6005) then
+              -- 端口已就绪，设置 godot-lsp.nvim
+              if godot_mod.setup_godot_lsp then
+                godot_mod.setup_godot_lsp()
+              end
+              -- 重新启用 gdscript LSP（godotdev 的 vim.lsp.enable）
+              pcall(vim.lsp.enable, "gdscript")
+              if godot_mod.ensure_gdscript_lsp_attached then
+                godot_mod.ensure_gdscript_lsp_attached()
+              end
+              vim.notify("[LSP] Godot LSP 客户端已重新连接", vim.log.levels.INFO)
+              return
+            end
+
+            retry_count = retry_count + 1
+            if retry_count < 3 then
+              vim.defer_fn(wait_and_setup, 10000)
+            else
+              vim.notify("[LSP] Godot LSP 端口 6005 仍未就绪（已重试 3 次），请手动检查", vim.log.levels.WARN)
+            end
+          end
+          vim.defer_fn(wait_and_setup, 10000)
+        else
+          vim.notify("[LSP] Godot LSP 后台服务启动失败", vim.log.levels.WARN)
+        end
+      end
+    end
+
+    -- ============================================
+    -- 第 5 步：重新启动当前文件的 LSP
+    -- ============================================
     local bufnr = vim.api.nvim_get_current_buf()
     local ft = vim.bo.filetype
 
