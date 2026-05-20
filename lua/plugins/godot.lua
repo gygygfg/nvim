@@ -26,6 +26,15 @@ if lsp_module_ok then
   lsp_module.formatters_by_ft["gdscript"] = { "gdscript-formatter" }
   lsp_module.formatters_by_ft["gdresource"] = { "gdscript-formatter" }
   lsp_module.formatters_by_ft["gdshader"] = { "gdscript-formatter" }
+
+  -- 预注册 godot_editor 服务器配置到 _server_configs，
+  -- 让主 LSP 系统在 start_server_with_config 时能直接使用。
+  -- 注意：由于此时 godotdev 尚未 setup，vim.lsp.config["gdscript"] 可能为空，
+  -- 实际注册延迟到 setup_godotdev() 中 godotdev.setup() 之后完成。
+  -- 这里先确保 _server_configs 表存在。
+  if not lsp_module._server_configs then
+    lsp_module._server_configs = {}
+  end
 end
 
 -- 检测是否是 Godot 项目
@@ -35,27 +44,90 @@ local function is_godot_project()
 end
 
 -- 清除 gdscript 缓冲区的 lsp_started 标记，让主 LSP 系统可以正确附加
--- 主 LSP 系统（lsp/init.lua）使用白名单机制，当 `start_lsp_for_filetype` 发现文件类型
--- 不在 `filetype_mappings` 中时，会设置 `vim.b[bufnr].lsp_started = true` 并跳过。
--- 由于 gdscript 已被我们注册到 filetype_mappings，该标记不会由 LSP 系统设置，
--- 但为了兼容性，在 godotdev 加载后主动确保 gdscript 缓冲区的 LSP 正确附加。
+-- 函数已增强：当找不到已存在的 godot_editor 客户端时，会通过主 LSP 系统的
+-- start_lsp_for_filetype 重新触发完整的 LSP 启动流程（包括启动新客户端）。
+-- 
 local function ensure_gdscript_lsp_attached()
+  local gdscript_bufs = {}
   for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
     if vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_is_loaded(bufnr) then
       local ft = vim.bo[bufnr].filetype
       if ft == "gdscript" or ft == "gdresource" or ft == "gdshader" then
-        -- 清除标记，让 LSP 系统可以处理此缓冲区
-        vim.b[bufnr].lsp_started = nil
-        -- 检查是否已有 godot_editor 客户端
-        local clients = vim.lsp.get_clients({ name = "godot_editor", bufnr = bufnr })
-        if #clients == 0 then
-          -- 尝试附加到已存在的 godot_editor 客户端
-          local all_clients = vim.lsp.get_clients({ name = "godot_editor" })
-          for _, client in ipairs(all_clients) do
-            if not vim.lsp.buf_is_attached(bufnr, client.id) then
-              vim.lsp.buf_attach_client(bufnr, client.id)
-              break
-            end
+        table.insert(gdscript_bufs, bufnr)
+      end
+    end
+  end
+
+  if #gdscript_bufs == 0 then
+    return
+  end
+
+  -- 检查是否有可用的 godot_editor 客户端
+  local all_clients = vim.lsp.get_clients({ name = "godot_editor" })
+  local has_working_client = false
+  for _, client in ipairs(all_clients) do
+    -- 简单检查客户端是否存活（有 rpc handle）
+    if client.rpc and client.rpc.handle then
+      has_working_client = true
+      break
+    end
+  end
+
+  if not has_working_client then
+    -- 没有可用的客户端，清理所有残留的 failed/stopped 客户端
+    for _, client in ipairs(all_clients) do
+      if client.rpc and client.rpc.handle then
+        -- 客户端存活但未在上方被标记为 working？实际上这里是清理所有
+        -- 安全起见，只清理"没有 rpc handle"的
+      else
+        pcall(client.stop, client)
+      end
+    end
+
+    -- 通过主 LSP 系统重新启动 LSP 客户端
+    -- 使用 pcall 获取主 LSP 模块并调用 start_lsp_for_filetype
+    local lsp_ok, lsp_mod = pcall(require, "lsp")
+    if lsp_ok and lsp_mod.start_lsp_for_filetype then
+      for _, bufnr in ipairs(gdscript_bufs) do
+        if vim.api.nvim_buf_is_valid(bufnr) then
+          local ft = vim.bo[bufnr].filetype
+          -- 清除标记，让 LSP 系统可以重新处理此缓冲区
+          vim.b[bufnr].lsp_started = nil
+          -- 调用主 LSP 系统的启动函数（包含 start_server_with_config）
+          lsp_mod.start_lsp_for_filetype(ft, bufnr)
+        end
+      end
+      return
+    end
+
+    -- 回退：直接使用 Neovim 内置 LSP 启用
+    if vim.lsp.config["gdscript"] and vim.lsp.config["gdscript"].cmd then
+      vim.lsp.enable("gdscript")
+      -- 给 autocmd 一个机会执行
+      vim.schedule(function()
+        for _, bufnr in ipairs(gdscript_bufs) do
+          if vim.api.nvim_buf_is_valid(bufnr) then
+            vim.b[bufnr].lsp_started = nil
+          end
+        end
+      end)
+    end
+    return
+  end
+
+  -- 存在可用的客户端，附加到所有 gdscript 缓冲区
+  for _, bufnr in ipairs(gdscript_bufs) do
+    if vim.api.nvim_buf_is_valid(bufnr) and vim.api.nvim_buf_is_loaded(bufnr) then
+      -- 清除标记，让 LSP 系统可以处理此缓冲区
+      vim.b[bufnr].lsp_started = nil
+      -- 检查是否已有 godot_editor 客户端附加到此缓冲区
+      local clients = vim.lsp.get_clients({ name = "godot_editor", bufnr = bufnr })
+      if #clients == 0 then
+        -- 尝试附加到已存在的 godot_editor 客户端
+        for _, client in ipairs(all_clients) do
+          if client.rpc and client.rpc.handle and not vim.lsp.buf_is_attached(bufnr, client.id) then
+            vim.lsp.buf_attach_client(bufnr, client.id)
+            break
           end
         end
       end
@@ -264,6 +336,19 @@ local function setup_godotdev()
     },
   })
 
+  -- godotdev.setup() 之后，将 vim.lsp.config["gdscript"] 的配置
+  -- 同步到主 LSP 系统的 _server_configs，使 start_server_with_config 可用
+  if lsp_module_ok and lsp_module then
+    local gd_lsp_config = vim.lsp.config["gdscript"]
+    if gd_lsp_config and gd_lsp_config.cmd then
+      if not lsp_module._server_configs then
+        lsp_module._server_configs = {}
+      end
+      lsp_module._server_configs["godot_editor"] = vim.deepcopy(gd_lsp_config)
+      lsp_module._server_configs["godot_editor"].filetypes = { "gdscript", "gd", "gdshader", "gdresource" }
+    end
+  end
+
   -- 先启动 Godot LSP 后台服务，确保端口就绪
   local server_started = start_godot_lsp_server()
 
@@ -276,11 +361,38 @@ local function setup_godotdev()
 
     local function try_attach_lsp()
       if is_port_in_use(6005) then
-        -- 端口已就绪，配置 godot-lsp.nvim
+        -- 端口已就绪：
+        -- 1. 先停止所有残留的 failed/stopped godot_editor 客户端
+        --    （因为 godotdev.setup() 中的 vim.lsp.enable 可能在服务就绪前
+        --     就尝试连接了，产生了 failed 客户端）
+        local existing_clients = vim.lsp.get_clients({ name = "godot_editor" })
+        local has_working = false
+        for _, c in ipairs(existing_clients) do
+          if c.rpc and c.rpc.handle then
+            has_working = true
+          else
+            -- 清理无效客户端
+            pcall(c.stop, c)
+          end
+        end
+
+        -- 2. 如果没有可用的 godot_editor 客户端，通过 vim.lsp.enable 重启
+        if not has_working then
+          -- 确保 vim.lsp.config["gdscript"] 存在后再 enable
+          if vim.lsp.config["gdscript"] and vim.lsp.config["gdscript"].cmd then
+            vim.lsp.enable("gdscript")
+          end
+        end
+
+        -- 3. 配置 godot-lsp.nvim
         setup_godot_lsp()
-        godotdev_loaded = true
-        ensure_gdscript_lsp_attached()
-        vim.notify("🚀 Godot 开发工具已加载", vim.log.levels.INFO)
+
+        -- 4. 延迟一下确保 LSP 客户端有时间连接，然后附加到缓冲区
+        vim.defer_fn(function()
+          godotdev_loaded = true
+          ensure_gdscript_lsp_attached()
+          vim.notify("🚀 Godot 开发工具已加载", vim.log.levels.INFO)
+        end, 1000)
         return
       end
 
@@ -288,7 +400,7 @@ local function setup_godotdev()
       if retry_count < max_retries then
         vim.defer_fn(try_attach_lsp, retry_delay)
       else
-        -- 3 次重试均失败，报错
+        -- 3 次重试均失败，报错但仍然尝试配置
         setup_godot_lsp()
         godotdev_loaded = true
         ensure_gdscript_lsp_attached()
@@ -1133,6 +1245,28 @@ vim.api.nvim_create_autocmd("VimEnter", {
   end,
 })
 
+-- 安全网：godotdev 加载后，新打开的 gdscript 缓冲区自动确保 LSP 附加
+-- 这解决了主 LSP 系统 FileType autocmd 可能先于 godotdev 初始化执行，
+-- 导致首次 LSP 客户端连接失败后无法自动重试的问题。
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = { "gdscript", "gdresource", "gdshader" },
+  callback = function(args)
+    if godotdev_loaded then
+      -- 延迟确保 godot_editor 客户端已完成启动
+      vim.defer_fn(function()
+        if vim.api.nvim_buf_is_valid(args.buf) then
+          vim.b[args.buf].lsp_started = nil
+          -- 通过主 LSP 系统触发完整的 LSP 启动/附加流程
+          local lsp_ok, lsp_mod = pcall(require, "lsp")
+          if lsp_ok and lsp_mod.start_lsp_for_filetype then
+            lsp_mod.start_lsp_for_filetype(args.match, args.buf)
+          end
+        end
+      end, 500)
+    end
+  end,
+})
+
 -- 退出时清理 Godot LSP 后台服务
 vim.api.nvim_create_autocmd("VimLeavePre", {
   callback = function()
@@ -1154,3 +1288,4 @@ return {
     godotdev_loaded = false
   end,
 }
+
