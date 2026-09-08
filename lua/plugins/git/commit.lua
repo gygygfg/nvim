@@ -2,11 +2,13 @@ local M = {}
 
 local function safe_shell_escape(str)
   -- 安全的 shell 转义函数，专门处理 git commit 信息
-  if not str then return "" end
+  if not str then
+    return ""
+  end
   -- 转义单引号、双引号和反斜杠
   local escaped = str:gsub("'", "'\\''")
   escaped = escaped:gsub('"', '\\"')
-  escaped = escaped:gsub('\\', '\\\\')
+  escaped = escaped:gsub("\\", "\\\\")
   -- 使用单引号包裹整个字符串
   return "'" .. escaped .. "'"
 end
@@ -52,7 +54,7 @@ function M.safe_git_commit(message, options)
   local cmd
   if auto_stage then
     -- 先执行 git add -A 添加所有更改（包括未跟踪的文件）
-    local add_result = vim.fn.system('git add -A')
+    local add_result = vim.fn.system("git add -A")
     local add_exit_code = vim.v.shell_error
 
     if add_exit_code ~= 0 then
@@ -60,10 +62,10 @@ function M.safe_git_commit(message, options)
     end
 
     -- 然后执行 git commit -m
-    cmd = string.format('git commit -m %s', safe_shell_escape(message))
+    cmd = string.format("git commit -m %s", safe_shell_escape(message))
   else
     -- 只提交已暂存的更改
-    cmd = string.format('git commit -m %s', safe_shell_escape(message))
+    cmd = string.format("git commit -m %s", safe_shell_escape(message))
   end
 
   -- 执行命令
@@ -123,15 +125,15 @@ local function process_ai_response(response, callback)
       content = content:gsub("^[\"']", ""):gsub("[\"']$", ""):gsub("^%s+", ""):gsub("%s+$", "")
 
       -- 移除 Lua 注释和代码块标记
-      content = content:gsub("%-%-.*", "")  -- 移除 Lua 单行注释
-      content = content:gsub("```[^`]*```", "")  -- 移除代码块
-      content = content:gsub("`[^`]*`", "")  -- 移除内联代码
+      content = content:gsub("%-%-.*", "") -- 移除 Lua 单行注释
+      content = content:gsub("```[^`]*```", "") -- 移除代码块
+      content = content:gsub("`[^`]*`", "") -- 移除内联代码
 
       -- 移除多余的空行和空白
-      content = content:gsub("\n%s*\n", "\n")  -- 移除空行
-      content = content:gsub("^\n+", "")  -- 移除开头的空行
-      content = content:gsub("\n+$", "")  -- 移除结尾的空行
-      content = content:gsub("%s+", " ")  -- 将多个空白合并为一个空格
+      content = content:gsub("\n%s*\n", "\n") -- 移除空行
+      content = content:gsub("^\n+", "") -- 移除开头的空行
+      content = content:gsub("\n+$", "") -- 移除结尾的空行
+      content = content:gsub("%s+", " ") -- 将多个空白合并为一个空格
 
       -- 再次清理首尾空白
       content = content:gsub("^%s+", ""):gsub("%s+$", "")
@@ -144,6 +146,9 @@ local function process_ai_response(response, callback)
       -- 静默提示：AI 生成成功
       -- vim.notify("AI 生成的提交信息: " .. content, vim.log.levels.INFO)
       callback(content)
+    elseif parsed.error and parsed.error.message then
+      vim.notify("API 错误: " .. parsed.error.message, vim.log.levels.ERROR)
+      callback(nil)
     else
       vim.notify("错误：API 响应格式不正确，未找到 choices 或 message 字段", vim.log.levels.ERROR)
       callback(nil)
@@ -154,29 +159,29 @@ local function process_ai_response(response, callback)
 
     -- 解析JSON响应，提取content字段中的字符串
     -- 方法：使用字符串匹配查找"content":"..."，适用于简单响应
-    local content_start = string.find(response, '\"content\":\"')
+    local content_start = string.find(response, '"content":"')
     if content_start then
-      content_start = content_start + 13  -- 跳过'"content":"'，定位到内容起始位置
-      local content_end = string.find(response, '\"', content_start, true)  -- 查找下一个双引号作为结束
+      content_start = content_start + 13 -- 跳过'"content":"'，定位到内容起始位置
+      local content_end = string.find(response, '"', content_start, true) -- 查找下一个双引号作为结束
       if content_end then
         local content = string.sub(response, content_start, content_end - 1)
         -- 反转义字符串（例如，处理JSON中的换行符\n）
-        content = string.gsub(content, '\\n', '\n')  -- 将\n转换为实际换行
-        content = string.gsub(content, '\\\"', '\"')   -- 将\"转换为"
+        content = string.gsub(content, "\\n", "\n") -- 将\n转换为实际换行
+        content = string.gsub(content, '\\"', '"') -- 将\"转换为"
 
         -- 清理消息：移除可能的引号和空白
         content = content:gsub("^[\"']", ""):gsub("[\"']$", ""):gsub("^%s+", ""):gsub("%s+$", "")
 
         -- 移除 Lua 注释和代码块标记
-        content = content:gsub("%-%-.*", "")  -- 移除 Lua 单行注释
-        content = content:gsub("```[^`]*```", "")  -- 移除代码块
-        content = content:gsub("`[^`]*`", "")  -- 移除内联代码
+        content = content:gsub("%-%-.*", "") -- 移除 Lua 单行注释
+        content = content:gsub("```[^`]*```", "") -- 移除代码块
+        content = content:gsub("`[^`]*`", "") -- 移除内联代码
 
         -- 移除多余的空行和空白
-        content = content:gsub("\n%s*\n", "\n")  -- 移除空行
-        content = content:gsub("^\n+", "")  -- 移除开头的空行
-        content = content:gsub("\n+$", "")  -- 移除结尾的空行
-        content = content:gsub("%s+", " ")  -- 将多个空白合并为一个空格
+        content = content:gsub("\n%s*\n", "\n") -- 移除空行
+        content = content:gsub("^\n+", "") -- 移除开头的空行
+        content = content:gsub("\n+$", "") -- 移除结尾的空行
+        content = content:gsub("%s+", " ") -- 将多个空白合并为一个空格
 
         -- 再次清理首尾空白
         content = content:gsub("^%s+", ""):gsub("%s+$", "")
@@ -279,29 +284,29 @@ function M.generate_ai_commit_message(callback, options)
   -- 静默提示：正在请求 AI
   vim.notify("正在请求 AI 生成提交信息...", vim.log.levels.INFO, { timeout = 1500 })
 
-  -- 使用阶跃星辰 API
-  -- 注意：这里使用 STEP_API_KEY 环境变量
-  local api_key = os.getenv("STEP_API_KEY") or ""
-  local base_url = "https://api.stepfun.com/v1"
-  local model = "step-1-8k"  -- 文档中示例使用的模型
+  -- 使用 DeepSeek API
+  -- 注意：这里使用 DEEPSEEK_API_KEY 环境变量
+  local api_key = os.getenv("DEEPSEEK_API_KEY") or ""
+  local base_url = "https://api.deepseek.com/v1"
+  local model = "deepseek-chat" -- DeepSeek 对话模型
 
   if api_key == "" then
-    vim.notify("未设置 STEP_API_KEY 环境变量，使用备用方案", vim.log.levels.WARN)
+    vim.notify("未设置 DEEPSEEK_API_KEY 环境变量，使用备用方案", vim.log.levels.WARN)
     -- 调用备用方案
     generate_fallback_commit_message(diff_output, callback)
     return
   end
 
-  -- 构建阶跃星辰 API 格式的请求数据
+  -- 构建 DeepSeek API 格式的请求数据
   local messages = {
     {
       role = "system",
-      content = "你是由阶跃星辰提供的AI聊天助手,你擅长中文,英文,以及多种其他语言的对话。在保证用户数据安全的前提下,你能对用户的问题和请求,作出快速和精准的回答。同时,你的回答和建议应该拒绝黄赌毒,暴力恐怖主义的内容"
+      content = "你是一个专业的 Git 提交信息生成助手，擅长根据代码变更生成简洁、规范的中文 commit message。",
     },
     {
       role = "user",
-      content = prompt
-    }
+      content = prompt,
+    },
   }
 
   -- 使用 vim.json.encode 来构建 JSON（更可靠的方法）
@@ -310,7 +315,7 @@ function M.generate_ai_commit_message(callback, options)
     -- Neovim 0.10+ 支持 vim.json
     json_data = vim.json.encode({
       model = model,
-      messages = messages
+      messages = messages,
     })
   else
     -- 回退到字符串拼接
@@ -321,8 +326,8 @@ function M.generate_ai_commit_message(callback, options)
       end
       -- 转义双引号，确保JSON有效性
       local escaped_content = string.gsub(msg.content, '"', '\\"')
-      escaped_content = string.gsub(escaped_content, '\\n', '\\\\n')  -- 转义换行符
-      escaped_content = string.gsub(escaped_content, '\\r', '\\\\r')  -- 转义回车符
+      escaped_content = string.gsub(escaped_content, "\\n", "\\\\n") -- 转义换行符
+      escaped_content = string.gsub(escaped_content, "\\r", "\\\\r") -- 转义回车符
       json_messages = json_messages .. string.format('{"role":"%s","content":"%s"}', msg.role, escaped_content)
     end
     json_data = string.format('{"model":"%s","messages":[%s]}', model, json_messages)
@@ -341,7 +346,12 @@ function M.generate_ai_commit_message(callback, options)
   end
 
   -- 构造curl命令：使用临时文件传递JSON数据
-  local curl_cmd = string.format('curl -s -X POST "%s/chat/completions" -H "Authorization: Bearer %s" -H "Content-Type: application/json" --data-binary @%s', base_url, api_key, temp_file)
+  local curl_cmd = string.format(
+    'curl -s -X POST "%s/chat/completions" -H "Authorization: Bearer %s" -H "Content-Type: application/json" --data-binary @%s',
+    base_url,
+    api_key,
+    temp_file
+  )
 
   -- 执行curl命令并读取响应
   -- 静默调试信息
@@ -422,7 +432,10 @@ function M.setup()
 
                 if success then
                   if commit_hash_or_error ~= "" then
-                    vim.notify("✓ AI 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. final_input, vim.log.levels.INFO)
+                    vim.notify(
+                      "✓ AI 提交成功: " .. commit_hash_or_error:sub(1, 8) .. " - " .. final_input,
+                      vim.log.levels.INFO
+                    )
                   else
                     vim.notify("✓ AI 提交成功: " .. final_input, vim.log.levels.INFO)
                   end

@@ -1,6 +1,10 @@
 -- lua/config/theme.lua
 -- 主题配置
 
+vim.pack.add({
+  gh("folke/tokyonight.nvim"),
+})
+
 require("tokyonight").setup({
   style = "night",
   transparent = false,

@@ -3,6 +3,11 @@
 
 local M = {}
 
+vim.pack.add({
+  -- 模糊搜索
+  gh("nvim-telescope/telescope.nvim"),
+})
+
 function M.setup()
   require("telescope").setup({
     defaults = {

@@ -568,14 +568,28 @@ local function inject_console_logger(html_path)
     };
   });
 
-  // 也捕获未处理的错误
+  // 也捕获未处理的错误（过滤掉 CORS 相关的无意义 "Script error."）
   window.addEventListener('error', function(e) {
+    // "Script error." 是浏览器 CORS 安全策略导致的假阳性：
+    // 当跨域脚本抛出异常时，浏览器隐藏错误详情，仅报告无意义的 "Script error."
+    // 跳过这些无法定位问题的错误，避免误触发服务端自动停止机制
+    if (e.message === 'Script error.' && e.filename === '' && e.lineno === 0) {
+      return;
+    }
     sendLog('error', ['Uncaught:', e.message, 'at', e.filename + ':' + e.lineno]);
   });
 
-  // 捕获 Promise 未处理拒绝
+  // 捕获 Promise 未处理拒绝（也过滤浏览器扩展导致的假阳性）
   window.addEventListener('unhandledrejection', function(e) {
-    sendLog('warn', ['Unhandled Promise:', e.reason]);
+    var reason = e.reason;
+    // 跳过来自浏览器扩展的无意义 rejection
+    if (reason && typeof reason.message === 'string') {
+      if (reason.message.indexOf('Extension') !== -1 ||
+          reason.message.indexOf('chrome') !== -1) {
+        return;
+      }
+    }
+    sendLog('warn', ['Unhandled Promise:', reason]);
   });
 
   console.log('[Godot Logger] ✅ 控制台日志拦截已启用，print() 输出将发送到 Neovim 悬浮窗');
@@ -753,10 +767,28 @@ vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
     vim.api.nvim_win_set_cursor(win, { vim.api.nvim_buf_line_count(buf), 0 })
   end
 
-  -- [ERROR] 自动停止机制：记录每一条 [ERROR]，发现重复或超时 1 秒则自动停止并打印全部记录
+  -- [ERROR] 自动停止机制：记录 [ERROR]，过滤假阳性，发现重复或 10 秒内出现 3+ 条错误则自动停止
   local error_records = {}
   local first_error_time = nil
   local auto_stop_triggered = false
+
+  -- 已知的假阳性错误模式（非致命，不触发自动停止）
+  local false_positive_patterns = {
+    "Script error. at :0",            -- 浏览器 CORS 安全策略导致的假阳性
+    "WARNING: Could not create render target", -- Godot WebGL 兼容性警告（非致命）
+    "Uncaught: Script error",         -- 浏览器跨域脚本错误（无实际信息）
+    "Unhandled Promise:",             -- Promise rejection 可能来自浏览器扩展
+    "WebGL: ",                        -- WebGL 相关警告
+  }
+
+  local function is_false_positive(line)
+    for _, pattern in ipairs(false_positive_patterns) do
+      if line:find(pattern, 1, true) then
+        return true
+      end
+    end
+    return false
+  end
 
   local function check_error_auto_stop(line)
     if auto_stop_triggered then
@@ -765,6 +797,12 @@ vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
 
     -- 检查行中是否包含 [ERROR]
     if not line:find("%[ERROR%]") then
+      return false
+    end
+
+    -- 过滤已知假阳性（如 CORS Script error、WebGL 兼容性警告等）
+    if is_false_positive(line) then
+      append_output("ℹ️  已忽略非致命错误: " .. line:gsub("%[%d%d:%d%d:%d%d [AP]M%] ", ""))
       return false
     end
 
@@ -785,14 +823,21 @@ vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
       end
     end
 
-    -- 条件2: 超时检查 — 从第一条 error 开始是否已过 1 秒
-    local is_timeout = false
-    if first_error_time and (vim.loop.now() - first_error_time >= 1000) then
-      is_timeout = true
+    -- 条件2: 密集错误检查 — 在 10 秒窗口内出现 3+ 条不同错误，可能是崩溃循环
+    local is_dense_flood = false
+    if #error_records >= 3 then
+      local elapsed = vim.loop.now() - first_error_time
+      if elapsed <= 10000 then
+        is_dense_flood = true
+      else
+        -- 超过 10 秒窗口，重置计数（错误稀疏分布，属于正常情况）
+        error_records = { line }
+        first_error_time = vim.loop.now()
+      end
     end
 
     -- 任一条件满足则触发自动停止
-    if not (is_dup or is_timeout) then
+    if not (is_dup or is_dense_flood) then
       return false
     end
 
@@ -808,8 +853,8 @@ vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
     append_output("")
     if is_dup then
       append_output("⏹ 停止原因：发现重复的 [ERROR] 记录")
-    elseif is_timeout then
-      append_output("⏹ 停止原因：第一条 [ERROR] 已超过 1 秒")
+    elseif is_dense_flood then
+      append_output("⏹ 停止原因：10 秒内出现 3+ 条错误，疑似崩溃循环")
     end
     append_output("==========================================")
     append_output("")

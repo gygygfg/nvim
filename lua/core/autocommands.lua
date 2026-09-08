@@ -13,31 +13,49 @@ vim.api.nvim_create_autocmd("UIEnter", {
   -- 主题配置 - 启动时加载
   once = true,
   callback = function()
-    require('plugins.theme')
+    require("plugins.theme")
   end,
 })
 
-vim.api.nvim_create_autocmd("VimEnter", {
-  -- 状态栏和缓冲区 - 启动后加载
-  once = true,
-  callback = function()
-    pcall(require, 'plugins.lualine')
-    pcall(require, 'plugins.bufferline')
-  end,
-})
+-- vim.api.nvim_create_autocmd("VimEnter", {
+--   -- 状态栏和缓冲区 - 启动后加载
+--   once = true,
+--   callback = function()
+--     pcall(require, "plugins.lualine")
+--     pcall(require, "plugins.bufferline")
+--   end,
+-- })
 
 vim.api.nvim_create_user_command("TelescopeFind", function()
   -- Telescope - 按需加载
-  require('plugins.telescope').setup()
-  require('telescope.builtin').find_files()
+  require("plugins.telescope").setup()
+  require("telescope.builtin").find_files()
 end, { desc = "查找文件" })
 
 autocmd("FileType", {
   -- 缩进2格的文件类型
   pattern = {
-    "lua", "javascript", "typescript", "javascriptreact", "typescriptreact",
-    "json", "css", "html", "xml", "yaml", "markdown", "sh", "bash", "zsh",
-    "php", "ruby", "vim", "terraform", "hcl", "dockerfile", "yaml.docker-compose"
+    "lua",
+    "javascript",
+    "typescript",
+    "javascriptreact",
+    "typescriptreact",
+    "json",
+    "css",
+    "html",
+    "xml",
+    "yaml",
+    "markdown",
+    "sh",
+    "bash",
+    "zsh",
+    "php",
+    "ruby",
+    "vim",
+    "terraform",
+    "hcl",
+    "dockerfile",
+    "yaml.docker-compose",
   },
   callback = function()
     vim.opt_local.tabstop = 2
@@ -45,14 +63,25 @@ autocmd("FileType", {
     vim.opt_local.softtabstop = 2
     vim.opt_local.expandtab = true
   end,
-  group = mygroup
+  group = mygroup,
 })
 
 autocmd("FileType", {
   -- 缩进4格的文件类型
   pattern = {
-    "python", "java", "c", "cpp", "go", "rust", "swift",
-    "kotlin", "scala", "cs", "dart", "perl", "fortran"
+    "python",
+    "java",
+    "c",
+    "cpp",
+    "go",
+    "rust",
+    "swift",
+    "kotlin",
+    "scala",
+    "cs",
+    "dart",
+    "perl",
+    "fortran",
   },
   callback = function()
     vim.opt_local.tabstop = 4
@@ -60,7 +89,7 @@ autocmd("FileType", {
     vim.opt_local.softtabstop = 4
     vim.opt_local.expandtab = true
   end,
-  group = mygroup
+  group = mygroup,
 })
 
 autocmd("FileType", {
@@ -71,7 +100,7 @@ autocmd("FileType", {
     vim.opt_local.tabstop = 4
     vim.opt_local.shiftwidth = 4
   end,
-  group = mygroup
+  group = mygroup,
 })
 
 autocmd("BufWritePre", {
@@ -102,7 +131,7 @@ autocmd("BufWritePre", {
       })
 
       if success then
-        vim.notify('conform 格式化成功')
+        vim.notify("conform 格式化成功")
         return
       end
     end
@@ -123,7 +152,7 @@ autocmd("BufWritePre", {
       if has_formatting then
         local save_cursor = vim.fn.getpos(".")
         vim.lsp.buf.format({ async = false, bufnr = bufnr })
-        vim.notify('使用 LSP 格式化')
+        vim.notify("使用 LSP 格式化")
         vim.fn.setpos(".", save_cursor)
         return true
       end
@@ -136,11 +165,11 @@ autocmd("BufWritePre", {
     if not lsp_success and not is_sensitive then
       local save_cursor = vim.fn.getpos(".")
       vim.cmd("silent! normal! gg=G")
-      vim.notify('使用 gg=G 格式化')
+      vim.notify("使用 gg=G 格式化")
       vim.fn.setpos(".", save_cursor)
     end
   end,
-  group = mygroup
+  group = mygroup,
 })
 
 autocmd("FileType", {
@@ -160,16 +189,16 @@ autocmd("FileType", {
       end
     end
   end,
-  group = mygroup
+  group = mygroup,
 })
 
 -- 诊断配置
 vim.diagnostic.config({
   virtual_text = {
     enabled = false,
-    prefix = "■"
+    prefix = "■",
   },
   float = {
-    border = "none"
-  }
+    border = "none",
+  },
 })

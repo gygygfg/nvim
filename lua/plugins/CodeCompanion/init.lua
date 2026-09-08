@@ -2,6 +2,10 @@
 -- 使用 load.addPack() 安装插件
 -- 文件：/root/nvim/lua/plugins/CodeCompanion/init.lua
 
+vim.pack.add({
+  gh("olimorris/codecompanion.nvim"),
+})
+
 local function run_mcphub_build()
   -- 检查 mcphub 是否已安装
   local success, _ = pcall(require, "mcphub")

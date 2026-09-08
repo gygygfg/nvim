@@ -92,7 +92,9 @@ function M.load_all_plugins()
   if handle then
     while true do
       local name, type = vim.loop.fs_scandir_next(handle)
-      if not name then break end
+      if not name then
+        break
+      end
 
       if type == "directory" then
         local init_path = plugins_dir .. "/" .. name .. "/init.lua"
@@ -148,7 +150,9 @@ function M.list_available_plugins()
   if handle then
     while true do
       local name, type = vim.loop.fs_scandir_next(handle)
-      if not name then break end
+      if not name then
+        break
+      end
 
       if type == "directory" then
         local init_path = plugins_dir .. "/" .. name .. "/init.lua"

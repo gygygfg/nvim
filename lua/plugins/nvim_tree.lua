@@ -1,7 +1,11 @@
 -- lua/config/nvim_tree.lua
 -- Nvim-tree 文件树配置
 
-vim.pack.add({ gh("nvim-tree.lua") })
+vim.pack.add({
+  gh("nvim-tree.lua"),
+  gh("nvim-tree/nvim-tree.lua"),
+})
+
 vim.api.nvim_create_autocmd({ "BufRead", "BufEnter" }, {
   -- 状态栏和缓冲区 - 启动后加载
   once = true,

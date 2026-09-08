@@ -1,5 +1,9 @@
 -- lua/config/editor.lua
 -- 编辑器增强配置
+vim.pack.add({
+  gh("windwp/nvim-autopairs"),
+  gh("numToStr/Comment.nvim"),
+})
 
 require("nvim-autopairs").setup({
   -- nvim-autopairs setup

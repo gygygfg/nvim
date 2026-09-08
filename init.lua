@@ -26,24 +26,11 @@ end
 vim.pack.add({
   -- 安装软件包而不加载
   -- 主题相关
-  gh("folke/tokyonight.nvim"),
   gh("nvim-tree/nvim-web-devicons"),
   -- 界面增强
-  gh("nvim-lualine/lualine.nvim"),
-  gh("akinsho/bufferline.nvim"),
   gh("folke/noice.nvim"),
   gh("rcarriga/nvim-notify"),
-  -- 编辑增强
-  gh("nvim-treesitter/nvim-treesitter"),
-  gh("windwp/nvim-autopairs"),
-  gh("numToStr/Comment.nvim"),
-  -- 文件浏览
-  gh("nvim-tree/nvim-tree.lua"),
-  -- 模糊搜索
-  gh("nvim-telescope/telescope.nvim"),
-  gh("nvim-lua/plenary.nvim"),
   -- AI 辅助
-  gh("olimorris/codecompanion.nvim"),
   gh("github/copilot.vim"),
   -- 工具类
   gh("nvim-lua/popup.nvim"),
@@ -63,10 +50,9 @@ if spell_ok then
   spell.setup({
     enabled = true,
     languages = { "en_us" },
-    auto_correct_on_tab = true,  -- 按 Tab 时自动纠正
+    auto_correct_on_tab = true, -- 按 Tab 时自动纠正
     camel_case = true,
     max_suggestions = 5,
-
 
     -- 文件类型配置
     enable_for = { "markdown", "text", "gitcommit", "latex", "tex", "rst" },
@@ -119,5 +105,3 @@ do
     end)
   end
 end
-
-

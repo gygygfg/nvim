@@ -42,7 +42,19 @@ local function _cmp_setup()
     mapping = cmp.mapping.preset.insert({
       ["<C-b>"] = cmp.mapping.scroll_docs(-4),
       ["<C-f>"] = cmp.mapping.scroll_docs(4),
-      ["<CR>"] = cmp.mapping.confirm({ select = true, behavior = cmp.ConfirmBehavior.Replace }),
+      ["<CR>"] = cmp.mapping(function(fallback)
+        if cmp.visible() then
+          local entry = cmp.get_selected_entry()
+          if entry then
+            cmp.confirm({ behavior = cmp.ConfirmBehavior.Replace })
+          else
+            cmp.close()
+            fallback()
+          end
+        else
+          fallback()
+        end
+      end, { "i", "s" }),
       ["<C-.>"] = cmp.mapping(cmp.mapping.complete(), { "i", "c" }),
       ["<C-,>"] = cmp.mapping({
         i = cmp.mapping.abort(),
@@ -59,23 +71,25 @@ local function _cmp_setup()
           return col ~= 0 and vim.api.nvim_buf_get_text(0, line - 1, 0, line - 1, col, {})[1]:match("^%s*$") == nil
         end
 
-        -- 优先尝试拼写自动纠正（在 cmp 可见之前，因为 typo 时补全内容也是错的）
-        local tab_spell_ok, tab_spell = pcall(require, "core.spell")
-        if tab_spell_ok and tab_spell.config and tab_spell.config.auto_correct_on_tab and has_words_before() then
-          if tab_spell.auto_correct_current_word() then
-            return
-          end
-        end
-
-        -- 正常补全流程
+        -- 正常补全流程（cmp 可见时优先导航菜单）
         if cmp.visible() then
           cmp.select_next_item()
         elseif luasnip.expand_or_jumpable() then
           luasnip.expand_or_jump()
-        elseif has_words_before() then
-          cmp.complete()
         else
-          fallback()
+          -- cmp 不可见时，优先尝试拼写自动纠正
+          local tab_spell_ok, tab_spell = pcall(require, "core.spell")
+          if tab_spell_ok and tab_spell.config and tab_spell.config.auto_correct_on_tab and has_words_before() then
+            if tab_spell.auto_correct_current_word() then
+              return
+            end
+          end
+
+          if has_words_before() then
+            cmp.complete()
+          else
+            fallback()
+          end
         end
       end, { "i", "s" }),
       ["<S-Tab>"] = cmp.mapping(function(fallback)
