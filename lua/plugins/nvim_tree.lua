@@ -2,7 +2,7 @@
 -- Nvim-tree 文件树配置
 
 vim.pack.add({
-  gh("nvim-tree.lua"),
+  -- gh("nvim-tree.lua"),
   gh("nvim-tree/nvim-tree.lua"),
 })
 

@@ -2,10 +2,6 @@
 -- 使用 load.addPack() 安装插件
 -- 文件：/root/nvim/lua/plugins/CodeCompanion/init.lua
 
-vim.pack.add({
-  gh("olimorris/codecompanion.nvim"),
-})
-
 local function run_mcphub_build()
   -- 检查 mcphub 是否已安装
   local success, _ = pcall(require, "mcphub")
@@ -27,12 +23,12 @@ end
 
 vim.pack.add({
   -- 安装所有插件（使用完整的 GitHub URL）
-  { src = "https://github.com/olimorris/codecompanion.nvim" },
-  { src = "https://github.com/nvim-lua/plenary.nvim" },
-  { src = "https://github.com/nvim-treesitter/nvim-treesitter" },
-  { src = "https://github.com/hrsh7th/nvim-cmp" },
-  { src = "https://github.com/stevearc/dressing.nvim" },
-  { src = "https://github.com/ravitemer/mcphub.nvim" },
+  gh("hrsh7th/nvim-cmp"),
+  gh("ravitemer/mcphub.nvim"),
+  gh("nvim-lua/plenary.nvim"),
+  gh("stevearc/dressing.nvim"),
+  gh("olimorris/codecompanion.nvim"),
+  gh("nvim-treesitter/nvim-treesitter"),
 })
 
 -- 运行 mcphub 构建命令

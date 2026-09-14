@@ -1,5 +1,397 @@
 local M = {}
 
+-- ============================================================
+-- 自建 HTTP + JSON：不依赖 NeoAI 内部模块
+-- 协议：OpenAI 兼容（POST {base_url}/chat/completions，Bearer 鉴权）
+-- ============================================================
+
+--- 默认配置。可被环境变量（COMMIT_AI_*）或 M.configure()/M.setup({...}) 覆盖。
+--- 目标端点需为 OpenAI 兼容协议，例如 deepseek / openai / glm / moonshot 等。
+local config = {
+  base_url = os.getenv("COMMIT_AI_BASE_URL") or "https://api.deepseek.com",
+  api_key = os.getenv("COMMIT_AI_API_KEY") or os.getenv("DEEPSEEK_API_KEY") or "",
+  model = os.getenv("COMMIT_AI_MODEL") or "deepseek-chat",
+  temperature = 0.3,
+  max_tokens = 512,
+  timeout_ms = 60000,
+  max_retries = 2,
+}
+
+--- 覆盖配置（仅合并传入的字段）
+--- @param overrides table|nil { base_url?, api_key?, model?, temperature?, max_tokens?, timeout_ms?, max_retries? }
+function M.configure(overrides)
+  for k, v in pairs(overrides or {}) do
+    config[k] = v
+  end
+end
+
+-- ========== 极简 JSON 编解码 ==========
+-- 仅覆盖本项目所需：对象/数组/字符串/数字/布尔/null，字符串转义与 \u 解码。
+
+local json = {}
+
+local function json_encode_string(s)
+  local out = s:gsub('[%z\1-\31\\"]', function(c)
+    local map = {
+      ['"'] = '\\"',
+      ["\\"] = "\\\\",
+      ["\b"] = "\\b",
+      ["\f"] = "\\f",
+      ["\n"] = "\\n",
+      ["\r"] = "\\r",
+      ["\t"] = "\\t",
+    }
+    return map[c] or string.format("\\u%04x", c:byte())
+  end)
+  return '"' .. out .. '"'
+end
+
+local function json_encode_value(v)
+  local t = type(v)
+  if v == nil then
+    return "null"
+  elseif t == "boolean" then
+    return v and "true" or "false"
+  elseif t == "number" then
+    if v ~= v or v == math.huge or v == -math.huge then
+      return "null"
+    end
+    if math.type and math.type(v) == "integer" then
+      return string.format("%d", v)
+    end
+    return string.format("%.14g", v)
+  elseif t == "string" then
+    return json_encode_string(v)
+  elseif t == "table" then
+    if vim.islist(v) then
+      local parts = {}
+      for i = 1, #v do
+        parts[i] = json_encode_value(v[i])
+      end
+      return "[" .. table.concat(parts, ",") .. "]"
+    end
+    local parts = {}
+    for k, val in pairs(v) do
+      if type(k) == "string" then
+        parts[#parts + 1] = json_encode_string(k) .. ":" .. json_encode_value(val)
+      end
+    end
+    return "{" .. table.concat(parts, ",") .. "}"
+  end
+  return "null"
+end
+
+--- 编码为 JSON 字符串
+function json.encode(v)
+  return json_encode_value(v)
+end
+
+local function json_decode_error(str, pos, msg)
+  error(string.format("JSON 解析错误(位置 %d): %s", pos, msg), 0)
+end
+
+local function json_skip_ws(str, pos)
+  local _, e = str:find("^[ \t\r\n]*", pos)
+  return e + 1
+end
+
+local decode_value -- 前向声明
+
+local function json_decode_string(str, pos)
+  local buf = {}
+  local i = pos + 1
+  local len = #str
+  while i <= len do
+    local c = str:sub(i, i)
+    if c == '"' then
+      return table.concat(buf), i + 1
+    elseif c == "\\" then
+      local esc = str:sub(i + 1, i + 1)
+      if esc == '"' or esc == "\\" or esc == "/" then
+        buf[#buf + 1] = esc
+        i = i + 2
+      elseif esc == "b" then
+        buf[#buf + 1] = "\b"
+        i = i + 2
+      elseif esc == "f" then
+        buf[#buf + 1] = "\f"
+        i = i + 2
+      elseif esc == "n" then
+        buf[#buf + 1] = "\n"
+        i = i + 2
+      elseif esc == "r" then
+        buf[#buf + 1] = "\r"
+        i = i + 2
+      elseif esc == "t" then
+        buf[#buf + 1] = "\t"
+        i = i + 2
+      elseif esc == "u" then
+        local code = tonumber(str:sub(i + 2, i + 5), 16)
+        if not code then
+          json_decode_error(str, i, "非法 \\u 转义")
+        end
+        i = i + 6
+        -- 代理对：高代理项 + 低代理项合成一个码点
+        if code >= 0xD800 and code <= 0xDBFF and str:sub(i, i + 1) == "\\u" then
+          local lo = tonumber(str:sub(i + 2, i + 5), 16)
+          if lo and lo >= 0xDC00 and lo <= 0xDFFF then
+            code = 0x10000 + (code - 0xD800) * 0x400 + (lo - 0xDC00)
+            i = i + 6
+          end
+        end
+        buf[#buf + 1] = vim.fn.nr2char(code)
+      else
+        json_decode_error(str, i, "非法转义 \\" .. esc)
+      end
+    else
+      buf[#buf + 1] = c
+      i = i + 1
+    end
+  end
+  json_decode_error(str, i, "字符串未闭合")
+end
+
+local function json_decode_array(str, pos)
+  local arr = {}
+  local i = json_skip_ws(str, pos + 1)
+  if str:sub(i, i) == "]" then
+    return arr, i + 1
+  end
+  while true do
+    local val
+    val, i = decode_value(str, i)
+    arr[#arr + 1] = val
+    i = json_skip_ws(str, i)
+    local c = str:sub(i, i)
+    if c == "," then
+      i = json_skip_ws(str, i + 1)
+    elseif c == "]" then
+      return arr, i + 1
+    else
+      json_decode_error(str, i, "数组语法错误")
+    end
+  end
+end
+
+local function json_decode_object(str, pos)
+  local obj = {}
+  local i = json_skip_ws(str, pos + 1)
+  if str:sub(i, i) == "}" then
+    return obj, i + 1
+  end
+  while true do
+    if str:sub(i, i) ~= '"' then
+      json_decode_error(str, i, "对象键必须是字符串")
+    end
+    local key
+    key, i = json_decode_string(str, i)
+    i = json_skip_ws(str, i)
+    if str:sub(i, i) ~= ":" then
+      json_decode_error(str, i, "对象缺少冒号")
+    end
+    i = json_skip_ws(str, i + 1)
+    local val
+    val, i = decode_value(str, i)
+    obj[key] = val
+    i = json_skip_ws(str, i)
+    local c = str:sub(i, i)
+    if c == "," then
+      i = json_skip_ws(str, i + 1)
+    elseif c == "}" then
+      return obj, i + 1
+    else
+      json_decode_error(str, i, "对象语法错误")
+    end
+  end
+end
+
+decode_value = function(str, pos)
+  local i = json_skip_ws(str, pos)
+  local c = str:sub(i, i)
+  if c == "" then
+    json_decode_error(str, i, "内容意外结束")
+  elseif c == '"' then
+    return json_decode_string(str, i)
+  elseif c == "{" then
+    return json_decode_object(str, i)
+  elseif c == "[" then
+    return json_decode_array(str, i)
+  elseif c == "t" then
+    if str:sub(i, i + 3) == "true" then
+      return true, i + 4
+    end
+    json_decode_error(str, i, "非法字面量")
+  elseif c == "f" then
+    if str:sub(i, i + 4) == "false" then
+      return false, i + 5
+    end
+    json_decode_error(str, i, "非法字面量")
+  elseif c == "n" then
+    if str:sub(i, i + 3) == "null" then
+      return nil, i + 4
+    end
+    json_decode_error(str, i, "非法字面量")
+  elseif c == "-" or c:match("%d") then
+    local num = str:match("^-?%d+%.?%d*[eE]?[-+]?%d*", i)
+    if not num then
+      json_decode_error(str, i, "非法数字")
+    end
+    return tonumber(num), i + #num
+  else
+    json_decode_error(str, i, "意外的字符 '" .. c .. "'")
+  end
+end
+
+--- 解码 JSON 文本；失败或非法输入返回 nil
+function json.decode(str)
+  if type(str) ~= "string" or str == "" then
+    return nil
+  end
+  local ok, val = pcall(decode_value, str, 1)
+  if not ok then
+    return nil
+  end
+  return val
+end
+
+-- 暴露给测试/调试
+M._json = json
+
+-- ========== curl 异步 POST ==========
+
+--- 异步发送 JSON POST 请求
+--- @param url string 完整 URL
+--- @param headers table 请求头
+--- @param body string 请求体（JSON 字符串）
+--- @param timeout_ms number 超时（毫秒）
+--- @param callback fun(ok:boolean, data:string|nil, err:string|nil, status:number|nil)
+local function http_post_json(url, headers, body, timeout_ms, callback)
+  if vim.fn.executable("curl") ~= 1 then
+    callback(false, nil, "未找到 curl 可执行文件")
+    return
+  end
+
+  -- 临时文件：请求体走 --data-binary @file（避免 shell 转义与参数长度限制），
+  -- 响应体 -o file，HTTP 状态码经 -w 输出到 stdout。
+  local tmp = vim.fn.tempname()
+  local body_file = tmp .. ".body"
+  local resp_file = tmp .. ".resp"
+
+  local bf = io.open(body_file, "wb")
+  if not bf then
+    callback(false, nil, "无法写入临时请求文件")
+    return
+  end
+  bf:write(body)
+  bf:close()
+
+  local args = {
+    "curl",
+    "-sS",
+    "--no-buffer",
+    "--max-time",
+    tostring(math.max(1, math.ceil((timeout_ms or 60000) / 1000))),
+    "-X",
+    "POST",
+    "-o",
+    resp_file,
+    "--data-binary",
+    "@" .. body_file,
+    "-w",
+    "%{http_code}",
+  }
+  for k, v in pairs(headers or {}) do
+    args[#args + 1] = "-H"
+    args[#args + 1] = k .. ": " .. tostring(v)
+  end
+  args[#args + 1] = url
+
+  local stdout_chunks = {}
+  local stderr_chunks = {}
+
+  local function cleanup()
+    pcall(vim.fn.delete, body_file)
+    pcall(vim.fn.delete, resp_file)
+  end
+
+  local job_id = vim.fn.jobstart(args, {
+    stdout_buffered = true,
+    stderr_buffered = true,
+    on_stdout = function(_, data)
+      for _, line in ipairs(data or {}) do
+        if line ~= "" then
+          stdout_chunks[#stdout_chunks + 1] = line
+        end
+      end
+    end,
+    on_stderr = function(_, data)
+      for _, line in ipairs(data or {}) do
+        if line ~= "" then
+          stderr_chunks[#stderr_chunks + 1] = line
+        end
+      end
+    end,
+    on_exit = function(_, code)
+      vim.schedule(function()
+        local resp_body = ""
+        local rf = io.open(resp_file, "rb")
+        if rf then
+          resp_body = rf:read("*a") or ""
+          rf:close()
+        end
+        cleanup()
+
+        local status = tonumber(table.concat(stdout_chunks, ""):match("(%d%d%d)%s*$") or "")
+        local stderr_text = table.concat(stderr_chunks, "\n")
+
+        if code ~= 0 and resp_body == "" then
+          callback(false, nil, stderr_text ~= "" and stderr_text or ("curl 退出码 " .. tostring(code)), status)
+          return
+        end
+        callback(true, resp_body, nil, status)
+      end)
+    end,
+  })
+
+  if job_id <= 0 then
+    cleanup()
+    callback(false, nil, "无法启动 curl 进程")
+  end
+end
+
+--- 清洗 AI 返回的提交信息：去引号/代码块/多余空白，并限制长度。
+--- @param content any
+--- @return string|nil
+local function clean_content(content)
+  if type(content) ~= "string" then
+    return nil
+  end
+  -- 去首尾引号与空白
+  local s = content:gsub("^[\"']+", ""):gsub("[\"']+$", "")
+  s = s:gsub("^%s+", ""):gsub("%s+$", "")
+  -- 去 markdown 代码块围栏标记（只去标记，保留内容，避免整段被删空）
+  s = s:gsub("```[^\n]*\n?", "")
+  s = s:gsub("```", "")
+  -- 去内联反引号（保留内部文字）
+  s = s:gsub("`([^`]*)`", "%1")
+  -- 折叠空白：多行合并为单行
+  s = s:gsub("%s+", " ")
+  s = s:gsub("^%s+", ""):gsub("%s+$", "")
+  -- 去掉常见前缀噪声
+  s = s:gsub("^提交信息[:：]%s*", "")
+  s = s:gsub("^commit message[:：]%s*", "")
+  s = s:gsub("^提交信息%s*", "")
+  s = s:gsub("^%s+", ""):gsub("%s+$", "")
+  if s == "" then
+    return nil
+  end
+  -- 限制长度（conventional commit 建议 ≤ 72）
+  if vim.fn.strchars(s) > 72 then
+    s = vim.fn.strcharpart(s, 0, 72)
+  end
+  return s
+end
+
 local function safe_shell_escape(str)
   -- 安全的 shell 转义函数，专门处理 git commit 信息
   if not str then
@@ -88,123 +480,6 @@ function M.safe_git_commit(message, options)
   end
 end
 
-local function process_ai_response(response, callback)
-  -- 处理 AI 响应
-  -- 首先检查响应是否为空
-  if not response or response == "" then
-    vim.notify("AI 响应为空", vim.log.levels.ERROR)
-    callback(nil)
-    return
-  end
-
-  -- 尝试查看是否是网络错误
-  if response:match("curl:") or response:match("Connection") then
-    vim.notify("网络连接错误，请检查网络", vim.log.levels.ERROR)
-    callback(nil)
-    return
-  end
-
-  -- 静默调试信息
-  -- vim.notify("收到 AI 响应，长度: " .. #response, vim.log.levels.DEBUG)
-
-  -- 尝试使用 vim.json.decode 解析 JSON
-  local ok, parsed
-  if vim.json and vim.json.decode then
-    ok, parsed = pcall(vim.json.decode, response)
-  else
-    -- 回退到 vim.fn.json_decode
-    ok, parsed = pcall(vim.fn.json_decode, response)
-  end
-
-  if ok and parsed then
-    -- 成功解析 JSON
-    if parsed.choices and #parsed.choices > 0 and parsed.choices[1].message then
-      local content = parsed.choices[1].message.content
-
-      -- 清理消息：移除可能的引号和空白
-      content = content:gsub("^[\"']", ""):gsub("[\"']$", ""):gsub("^%s+", ""):gsub("%s+$", "")
-
-      -- 移除 Lua 注释和代码块标记
-      content = content:gsub("%-%-.*", "") -- 移除 Lua 单行注释
-      content = content:gsub("```[^`]*```", "") -- 移除代码块
-      content = content:gsub("`[^`]*`", "") -- 移除内联代码
-
-      -- 移除多余的空行和空白
-      content = content:gsub("\n%s*\n", "\n") -- 移除空行
-      content = content:gsub("^\n+", "") -- 移除开头的空行
-      content = content:gsub("\n+$", "") -- 移除结尾的空行
-      content = content:gsub("%s+", " ") -- 将多个空白合并为一个空格
-
-      -- 再次清理首尾空白
-      content = content:gsub("^%s+", ""):gsub("%s+$", "")
-
-      -- 限制长度
-      if #content > 50 then
-        content = content:sub(1, 50)
-      end
-
-      -- 静默提示：AI 生成成功
-      -- vim.notify("AI 生成的提交信息: " .. content, vim.log.levels.INFO)
-      callback(content)
-    elseif parsed.error and parsed.error.message then
-      vim.notify("API 错误: " .. parsed.error.message, vim.log.levels.ERROR)
-      callback(nil)
-    else
-      vim.notify("错误：API 响应格式不正确，未找到 choices 或 message 字段", vim.log.levels.ERROR)
-      callback(nil)
-    end
-  else
-    -- JSON 解析失败，尝试使用字符串匹配作为备用方案
-    vim.notify("JSON 解析失败，尝试使用字符串匹配", vim.log.levels.WARN)
-
-    -- 解析JSON响应，提取content字段中的字符串
-    -- 方法：使用字符串匹配查找"content":"..."，适用于简单响应
-    local content_start = string.find(response, '"content":"')
-    if content_start then
-      content_start = content_start + 13 -- 跳过'"content":"'，定位到内容起始位置
-      local content_end = string.find(response, '"', content_start, true) -- 查找下一个双引号作为结束
-      if content_end then
-        local content = string.sub(response, content_start, content_end - 1)
-        -- 反转义字符串（例如，处理JSON中的换行符\n）
-        content = string.gsub(content, "\\n", "\n") -- 将\n转换为实际换行
-        content = string.gsub(content, '\\"', '"') -- 将\"转换为"
-
-        -- 清理消息：移除可能的引号和空白
-        content = content:gsub("^[\"']", ""):gsub("[\"']$", ""):gsub("^%s+", ""):gsub("%s+$", "")
-
-        -- 移除 Lua 注释和代码块标记
-        content = content:gsub("%-%-.*", "") -- 移除 Lua 单行注释
-        content = content:gsub("```[^`]*```", "") -- 移除代码块
-        content = content:gsub("`[^`]*`", "") -- 移除内联代码
-
-        -- 移除多余的空行和空白
-        content = content:gsub("\n%s*\n", "\n") -- 移除空行
-        content = content:gsub("^\n+", "") -- 移除开头的空行
-        content = content:gsub("\n+$", "") -- 移除结尾的空行
-        content = content:gsub("%s+", " ") -- 将多个空白合并为一个空格
-
-        -- 再次清理首尾空白
-        content = content:gsub("^%s+", ""):gsub("%s+$", "")
-
-        -- 限制长度
-        if #content > 50 then
-          content = content:sub(1, 50)
-        end
-
-        -- 静默提示：AI 生成成功（字符串匹配）
-        -- vim.notify("AI 生成的提交信息: " .. content, vim.log.levels.INFO)
-        callback(content)
-      else
-        vim.notify("错误：无法解析content字段的结束位置。", vim.log.levels.ERROR)
-        callback(nil)
-      end
-    else
-      vim.notify("错误：响应中未找到content字段。请检查API响应结构。", vim.log.levels.ERROR)
-      callback(nil)
-    end
-  end
-end
-
 local function generate_fallback_commit_message(diff_output, callback)
   -- 备用方案：使用简单的规则生成提交信息
   -- 静默提示：使用备用方案
@@ -281,112 +556,91 @@ function M.generate_ai_commit_message(callback, options)
   Git diff:
   ]] .. diff_output .. "\n\n提交信息："
 
-  -- 静默提示：正在请求 AI
-  vim.notify("正在请求 AI 生成提交信息...", vim.log.levels.INFO, { timeout = 1500 })
-
-  -- 使用 DeepSeek API
-  -- 注意：这里使用 DEEPSEEK_API_KEY 环境变量
-  local api_key = os.getenv("DEEPSEEK_API_KEY") or ""
-  local base_url = "https://api.deepseek.com/v1"
-  local model = "deepseek-chat" -- DeepSeek 对话模型
-
-  if api_key == "" then
-    vim.notify("未设置 DEEPSEEK_API_KEY 环境变量，使用备用方案", vim.log.levels.WARN)
-    -- 调用备用方案
+  -- 自建请求：OpenAI 兼容协议（POST {base_url}/chat/completions，Bearer 鉴权），
+  -- 不依赖 NeoAI；配置见文件顶部 config，可用 M.configure()/M.setup({...}) 覆盖。
+  if not config.api_key or config.api_key == "" then
+    vim.notify("未配置 API Key（COMMIT_AI_API_KEY / DEEPSEEK_API_KEY），使用备用方案", vim.log.levels.WARN)
     generate_fallback_commit_message(diff_output, callback)
     return
   end
 
-  -- 构建 DeepSeek API 格式的请求数据
-  local messages = {
-    {
-      role = "system",
-      content = "你是一个专业的 Git 提交信息生成助手，擅长根据代码变更生成简洁、规范的中文 commit message。",
-    },
-    {
-      role = "user",
-      content = prompt,
-    },
+  local model = config.model
+  if model == "auto" or model == "" or model == nil then
+    model = "deepseek-chat"
+  end
+
+  local url = config.base_url:gsub("/+$", "") .. "/chat/completions"
+  local headers = {
+    ["Content-Type"] = "application/json",
+    ["Authorization"] = "Bearer " .. config.api_key,
   }
+  local body = json.encode({
+    model = model,
+    messages = {
+      {
+        role = "system",
+        content = "你是一个专业的 Git 提交信息生成助手，擅长根据代码变更生成简洁、规范的中文 commit message。",
+      },
+      { role = "user", content = prompt },
+    },
+    temperature = config.temperature,
+    max_tokens = config.max_tokens,
+    stream = false,
+  })
 
-  -- 使用 vim.json.encode 来构建 JSON（更可靠的方法）
-  local json_data
-  if vim.json and vim.json.encode then
-    -- Neovim 0.10+ 支持 vim.json
-    json_data = vim.json.encode({
-      model = model,
-      messages = messages,
-    })
-  else
-    -- 回退到字符串拼接
-    local json_messages = ""
-    for i, msg in ipairs(messages) do
-      if i > 1 then
-        json_messages = json_messages .. ","
+  local function fail(msg)
+    vim.notify("AI 请求失败: " .. tostring(msg or "未知错误"), vim.log.levels.ERROR)
+    generate_fallback_commit_message(diff_output, callback)
+  end
+
+  -- 简单指数退避重试（仅对网络/服务端错误重试，4xx 直接失败）
+  local attempt = 0
+  local max_attempts = math.max(0, config.max_retries or 0) + 1
+
+  local function do_request()
+    attempt = attempt + 1
+    http_post_json(url, headers, body, config.timeout_ms, function(ok, data, err, status)
+      if not ok then
+        if attempt < max_attempts and (not status or status >= 500) then
+          vim.defer_fn(do_request, 300 * attempt)
+          return
+        end
+        fail(err)
+        return
       end
-      -- 转义双引号，确保JSON有效性
-      local escaped_content = string.gsub(msg.content, '"', '\\"')
-      escaped_content = string.gsub(escaped_content, "\\n", "\\\\n") -- 转义换行符
-      escaped_content = string.gsub(escaped_content, "\\r", "\\\\r") -- 转义回车符
-      json_messages = json_messages .. string.format('{"role":"%s","content":"%s"}', msg.role, escaped_content)
-    end
-    json_data = string.format('{"model":"%s","messages":[%s]}', model, json_messages)
+
+      local parsed = json.decode(data)
+      if not parsed then
+        fail("响应解析失败: " .. tostring(data):sub(1, 200))
+        return
+      end
+
+      if parsed.error then
+        local emsg = type(parsed.error) == "table" and parsed.error.message or parsed.error
+        fail(tostring(emsg))
+        return
+      end
+
+      local choice = parsed.choices and parsed.choices[1]
+      local raw = choice and choice.message and choice.message.content or nil
+      local content = clean_content(raw)
+      if content then
+        callback(content)
+      else
+        vim.notify("AI 返回内容为空，使用备用方案", vim.log.levels.WARN)
+        generate_fallback_commit_message(diff_output, callback)
+      end
+    end)
   end
 
-  -- 使用临时文件传递 JSON 数据，避免 shell 转义问题
-  local temp_file = os.tmpname()
-  local file = io.open(temp_file, "w")
-  if file then
-    file:write(json_data)
-    file:close()
-  else
-    vim.notify("错误：无法创建临时文件", vim.log.levels.ERROR)
-    generate_fallback_commit_message(diff_output, callback)
-    return
-  end
-
-  -- 构造curl命令：使用临时文件传递JSON数据
-  local curl_cmd = string.format(
-    'curl -s -X POST "%s/chat/completions" -H "Authorization: Bearer %s" -H "Content-Type: application/json" --data-binary @%s',
-    base_url,
-    api_key,
-    temp_file
-  )
-
-  -- 执行curl命令并读取响应
-  -- 静默调试信息
-  -- vim.notify("执行curl命令: " .. string.sub(curl_cmd, 1, 100) .. "...", vim.log.levels.DEBUG)
-  local handle = io.popen(curl_cmd)
-  local response = handle:read("*a")
-  local success, err = handle:close()
-
-  -- 清理临时文件
-  pcall(os.remove, temp_file)
-
-  -- 检查命令执行状态
-  if not success then
-    vim.notify("curl命令执行失败: " .. (err or "未知错误"), vim.log.levels.ERROR)
-    -- 调用备用方案
-    generate_fallback_commit_message(diff_output, callback)
-    return
-  end
-
-  -- 检查响应是否为空或错误
-  if response == "" or response == nil then
-    vim.notify("错误：未收到响应。请检查API密钥、网络连接或curl安装。", vim.log.levels.ERROR)
-    -- 调用备用方案
-    generate_fallback_commit_message(diff_output, callback)
-    return
-  end
-
-  -- 调试：显示响应前100个字符
-  -- vim.notify("收到响应，长度: " .. #response .. "，前100字符: " .. string.sub(response, 1, 100), vim.log.levels.DEBUG)
-
-  -- 处理响应
-  process_ai_response(response, callback)
+  do_request()
 end
 
-function M.setup()
+--- 注册快捷键。可选传入配置覆盖默认值，例如：
+--- M.setup({ api_key = "sk-xxx", model = "deepseek-chat", base_url = "https://api.deepseek.com" })
+--- @param opts table|nil
+function M.setup(opts)
+  M.configure(opts)
   vim.keymap.set("n", "<leader>gc", function()
     -- 使用自定义 git commit 功能（覆盖默认的 Gcommit）
     -- 首先检查是否有需要提交的更改

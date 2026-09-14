@@ -22,11 +22,20 @@ require("NeoAI").setup({
     -- 未写的 temperature/max_tokens/stream 沿用默认值。
     modes = {
       chat = { provider = "deepseek", model = "deepseek-v4-flash-vision-exp" },
-      plan = { provider = "deepseek", model = "deepseek-v4-flash-vision-exp" },
+      plan = { provider = "deepseek", model = "deepseek-flash" },
       auto = { provider = "deepseek", model = "deepseek-v4-flash-vision-exp" },
     },
   },
   tools = {
     external = godot_tools.get_tools(),
+    -- 启用网页抓取工具：把动态网页（React/Vue/SPA）在无头浏览器渲染后转成 Markdown。
+    -- ⚠️ 启用会自动安装 Node 依赖（node/npm 需已安装）；详见 NeoAI 默认配置注释。
+    web_fetch = {
+      enabled = true,
+      -- 受限网络：浏览器内核走 npmmirror 镜像，并绕开本机损坏的 127.0.0.1:7890 代理
+      npm_registry = "https://registry.npmmirror.com/",
+      playwright_download_host = "https://registry.npmmirror.com/-/binary/playwright",
+      ignore_system_proxy = true,
+    },
   },
 })
