@@ -130,6 +130,10 @@ M.filetype_mappings = {
   -- 脚本语言
   lua = { "lua_ls" },
   python = { "pyright", "html", "cssls", "ts_ls" },
+
+  -- JVM
+  java = { "jdtls" },
+
   sh = { "bashls" },
   zsh = { "bashls" },
   bash = { "bashls" },
@@ -148,6 +152,7 @@ M.lsp_to_mason = {
   clangd = "clangd",
   gopls = "gopls",
   rust_analyzer = "rust-analyzer",
+  jdtls = "jdtls",
 }
 
 M.formatter_to_mason = {
@@ -2264,6 +2269,7 @@ function M.setup_mason()
         "clangd",
         "gopls",
         "rust_analyzer",
+        "jdtls",
       },
 
       -- 配置处理器 - 只配置，不自动启动
@@ -2493,7 +2499,7 @@ vim.api.nvim_create_user_command("LspInstallMissing", function()
   local installed = 0
   for lsp_name, mason_name in pairs(M.lsp_to_mason) do
     local ok, pkg = pcall(mason_registry.get_package, mason_name)
-    if ok and not pkg:is_installed() then
+    if ok and not pkg:is_installed() and not pkg:is_installing() then
       pkg:install()
       print("正在安装: " .. mason_name, vim.log.levels.INFO)
       installed = installed + 1
@@ -2518,7 +2524,7 @@ vim.api.nvim_create_user_command("FormatterInstallMissing", function()
   local installed = 0
   for formatter, mason_name in pairs(M.formatter_to_mason) do
     local ok, pkg = pcall(mason_registry.get_package, mason_name)
-    if ok and not pkg:is_installed() then
+    if ok and not pkg:is_installed() and not pkg:is_installing() then
       pkg:install()
       print("正在安装: " .. mason_name .. " (" .. formatter .. ")", vim.log.levels.INFO)
       installed = installed + 1
