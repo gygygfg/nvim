@@ -119,13 +119,23 @@ local function build_cmd()
   return cmd
 end
 
+-- Neovim 0.12：cmd 为函数时必须返回 RPC client，而不是命令表。
+-- 用 vim.lsp.rpc.start 包装动态构建的启动命令，保持 workspace/root 每次启动时计算。
+local function cmd_factory(dispatchers, cfg)
+  return vim.lsp.rpc.start(build_cmd(), dispatchers, {
+    cwd = cfg and cfg.cmd_cwd or nil,
+    env = cfg and cfg.cmd_env or nil,
+    detached = cfg and cfg.detached or nil,
+  })
+end
+
 local capabilities = vim.lsp.protocol.make_client_capabilities()
 -- jdtls 需要 utf-16 偏移编码，避免多字节字符定位错乱
 capabilities.offsetEncoding = { "utf-16" }
 
 return {
   name = "jdtls",
-  cmd = build_cmd,
+  cmd = cmd_factory,
   filetypes = { "java" },
   root_dir = find_root,
   capabilities = capabilities,

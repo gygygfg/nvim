@@ -2,25 +2,6 @@
 -- 使用 load.addPack() 安装插件
 -- 文件：/root/nvim/lua/plugins/CodeCompanion/init.lua
 
-local function run_mcphub_build()
-  -- 检查 mcphub 是否已安装
-  local success, _ = pcall(require, "mcphub")
-  if not success then
-    vim.notify("正在安装 MCP Hub 依赖...", vim.log.levels.INFO)
-
-    -- 运行构建命令
-    local handle = io.popen("npm install -g mcp-hub@latest 2>&1")
-    local result = handle:read("*a")
-    handle:close()
-
-    if result:match("ERROR") or result:match("error") then
-      vim.notify("MCP Hub 安装失败: " .. result, vim.log.levels.ERROR)
-    else
-      vim.notify("MCP Hub 安装成功", vim.log.levels.INFO)
-    end
-  end
-end
-
 vim.pack.add({
   -- 安装所有插件（使用完整的 GitHub URL）
   gh("hrsh7th/nvim-cmp"),
@@ -31,8 +12,8 @@ vim.pack.add({
   gh("nvim-treesitter/nvim-treesitter"),
 })
 
--- 运行 mcphub 构建命令
-run_mcphub_build()
+-- 预热 MCP Hub 依赖：检测 mcp-hub CLI，缺失则异步安装（不阻塞启动）
+require("plugins.CodeCompanion.core.mcphub_bootstrap").ensure()
 
 -- 延迟加载 CodeCompanion 及其配置
 vim.defer_fn(function()

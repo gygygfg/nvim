@@ -108,13 +108,23 @@ function M.setup(opts)
   -- vim.notify("设置包路径，当前目录: " .. current_dir, vim.log.levels.DEBUG)
 
   -- 尝试初始化 MCP Hub，如果可用的话
+  -- 注意：mcphub.nvim 插件存在不代表 `mcp-hub` CLI 已安装；先确保 CLI 就绪，
+  -- 否则 mcphub.setup() 会因缺少可执行文件抛出 SETUP.MISSING_DEPENDENCY。
   local mcphub_success, mcphub = pcall(require, "mcphub")
   if mcphub_success and mcphub then
-    mcphub.setup({
+    local bootstrap = require("plugins.CodeCompanion.core.mcphub_bootstrap")
+    local mcphub_opts = {
       auto_approve = true, -- 自动批准所有 MCP 工具调用
       config_dir = vim.fn.expand("~/.config/nvim/mcp"), -- MCP 配置文件目录
-    })
-    -- vim.notify("✅ MCP Hub 初始化成功", vim.log.levels.INFO)
+    }
+    bootstrap.ensure(function(ok)
+      if not ok then
+        -- 安装失败/不可用时跳过 setup，避免 MISSING_DEPENDENCY 刷屏
+        vim.notify("⚠️  MCP Hub 不可用，已跳过初始化（MCP 功能受限）", vim.log.levels.WARN)
+        return
+      end
+      pcall(mcphub.setup, mcphub_opts)
+    end)
   else
     vim.notify("⚠️  MCP Hub 未找到，MCP 功能可能不可用", vim.log.levels.WARN)
     vim.notify("💡 请确保已安装 ravitemer/mcphub.nvim 插件", vim.log.levels.INFO)

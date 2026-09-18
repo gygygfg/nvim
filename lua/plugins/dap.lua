@@ -71,7 +71,7 @@ local function java_debug_adapter()
     true
   )[1]
   if not jar then
-    vim.notify("未找到 java-debug-adapter，请运行 :MasonInstall java-debug-adapter", vim.log.levels.ERROR)
+    vim.notify("java-debug-adapter 尚未就绪（将自动安装，或运行 :MasonInstall java-debug-adapter）", vim.log.levels.WARN)
     return nil
   end
   return { type = "server", port = "${port}", executable = { command = "java", args = { "-jar", jar, "${port}" } } }
@@ -154,24 +154,69 @@ map("n", "<leader>dt", function()
 end, vim.tbl_extend("force", opts, { desc = "DAP: 终止调试" }))
 
 -- ============================================================
--- Mason 依赖自愈：检查 java-debug-adapter / java-test
+-- Mason 依赖自愈：检查并自动安装 java-debug-adapter / java-test
 -- ============================================================
 vim.defer_fn(function()
   local ok, registry = pcall(require, "mason-registry")
   if not ok then
     return
   end
+
+  local names = { "java-debug-adapter", "java-test" }
   local missing = {}
-  for _, name in ipairs({ "java-debug-adapter", "java-test" }) do
+  for _, name in ipairs(names) do
     local okpkg, pkg = pcall(registry.get_package, name)
     if not (okpkg and pkg:is_installed()) then
       table.insert(missing, name)
     end
   end
-  if #missing > 0 then
-    vim.notify(
-      "Java 调试依赖未安装: " .. table.concat(missing, ", ") .. "\n运行 :MasonInstall " .. table.concat(missing, " "),
-      vim.log.levels.WARN
-    )
+
+  if #missing == 0 then
+    return
   end
+
+  vim.notify(
+    "Java 调试依赖缺失，正在自动安装: " .. table.concat(missing, ", "),
+    vim.log.levels.INFO
+  )
+
+  -- 触发安装（不同 mason 版本 install() 是否接管回调不一，用 pcall 包裹兼容）
+  for _, name in ipairs(missing) do
+    local okpkg, pkg = pcall(registry.get_package, name)
+    if okpkg and pkg then
+      pcall(function()
+        pkg:install({}, function() end)
+      end)
+    end
+  end
+
+  -- 轮询校验安装结果（约 15s 一次，最多 8 次）
+  local tries = 0
+  local max_tries = 8
+  local function verify()
+    tries = tries + 1
+    local still_missing = {}
+    for _, name in ipairs(names) do
+      local okpkg, pkg = pcall(registry.get_package, name)
+      if not (okpkg and pkg:is_installed()) then
+        table.insert(still_missing, name)
+      end
+    end
+    if #still_missing == 0 then
+      vim.notify("Java 调试依赖安装完成: " .. table.concat(names, ", "), vim.log.levels.INFO)
+      return
+    end
+    if tries >= max_tries then
+      vim.notify(
+        "Java 调试依赖仍未安装完成: "
+          .. table.concat(still_missing, ", ")
+          .. "\n可手动运行 :MasonInstall "
+          .. table.concat(still_missing, " "),
+        vim.log.levels.WARN
+      )
+      return
+    end
+    vim.defer_fn(verify, 15000)
+  end
+  vim.defer_fn(verify, 15000)
 end, 2000)

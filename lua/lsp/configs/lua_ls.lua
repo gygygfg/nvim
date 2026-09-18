@@ -72,14 +72,6 @@ return {
         semicolon = 'Disable',
         setType = false,
       },
-      -- 内存优化设置
-      misc = {
-        -- 减少内存使用
-        parameters = {
-          ["Lua.workspace.maxPreload"] = 1000,
-          ["Lua.workspace.preloadFileSize"] = 2000,
-        },
-      },
       telemetry = {
         enable = false,
       },
