@@ -10,6 +10,21 @@ vim.pack.add({
 -- 局部变量，标记 godotdev 是否已加载
 local godotdev_loaded = false
 
+-- 安全调用 vim.fs.root：
+-- 1) 无名缓冲区时 vim.fs.root 会把空字符串交给 vim.fs.abspath；
+-- 2) 当进程 cwd 已被删除时 uv.cwd() 返回 nil，触发断言失败。
+-- 两种情况都会让 VimEnter 回调报错，这里统一降级为返回 nil。
+local function safe_fs_root(bufnr, markers)
+  if vim.api.nvim_buf_get_name(bufnr) == "" then
+    return nil
+  end
+  local ok, root = pcall(vim.fs.root, bufnr, markers)
+  if ok then
+    return root
+  end
+  return nil
+end
+
 -- 将 gdscript 注册到主 LSP 系统，使其不被跳过
 -- godotdev.nvim 使用 vim.lsp.config["gdscript"] + vim.lsp.enable("gdscript") 启动 LSP，
 -- 服务名称为 "godot_editor"（见 godotdev/lsp.lua）
@@ -39,8 +54,7 @@ end
 
 -- 检测是否是 Godot 项目
 local function is_godot_project()
-  local root = vim.fs.root(0, { "project.godot" })
-  return root ~= nil
+  return safe_fs_root(0, { "project.godot" }) ~= nil
 end
 
 -- 清除 gdscript 缓冲区的 lsp_started 标记，让主 LSP 系统可以正确附加
@@ -211,7 +225,7 @@ local function start_godot_lsp_server()
     return false
   end
 
-  local root = vim.fs.root(0, { "project.godot" })
+  local root = safe_fs_root(0, { "project.godot" })
   if not root then
     return false
   end
@@ -632,7 +646,7 @@ end
 
 -- 导出 Godot 项目为 HTML5 并启动本地服务
 vim.api.nvim_create_user_command("GodotExportWeb", function(opts)
-  local root = vim.fs.root(0, { "project.godot", "export_presets.cfg" })
+  local root = safe_fs_root(0, { "project.godot", "export_presets.cfg" })
   if not root then
     vim.notify("当前不在 Godot 项目中，未找到 project.godot", vim.log.levels.ERROR)
     return

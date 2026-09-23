@@ -30,20 +30,97 @@ end
 
 local json = {}
 
+--- 解码一个 UTF-8 字符。合法返回 (codepoint, 下一字节位置)，非法返回 nil。
+local function utf8_decode_char(s, i)
+  local b = s:byte(i)
+  if not b then
+    return nil
+  end
+  local function is_cont(k)
+    local c = s:byte(i + k)
+    return c ~= nil and c >= 0x80 and c <= 0xBF
+  end
+  if b >= 0xC2 and b <= 0xDF then
+    if is_cont(1) then
+      return (b - 0xC0) * 0x40 + (s:byte(i + 1) - 0x80), i + 2
+    end
+  elseif b >= 0xE0 and b <= 0xEF then
+    if is_cont(1) and is_cont(2) then
+      local cp = (b - 0xE0) * 0x1000
+        + (s:byte(i + 1) - 0x80) * 0x40
+        + (s:byte(i + 2) - 0x80)
+      if cp >= 0x800 and not (cp >= 0xD800 and cp <= 0xDFFF) then
+        return cp, i + 3
+      end
+    end
+  elseif b >= 0xF0 and b <= 0xF4 then
+    if is_cont(1) and is_cont(2) and is_cont(3) then
+      local cp = (b - 0xF0) * 0x40000
+        + (s:byte(i + 1) - 0x80) * 0x1000
+        + (s:byte(i + 2) - 0x80) * 0x40
+        + (s:byte(i + 3) - 0x80)
+      if cp >= 0x10000 and cp <= 0x10FFFF then
+        return cp, i + 4
+      end
+    end
+  end
+  return nil
+end
+
+--- 将 Unicode 码点编码为 JSON \uXXXX 转义（超出 BMP 时输出 UTF-16 代理对）。
+local function utf8_codepoint_to_escape(cp)
+  if cp >= 0xD800 and cp <= 0xDFFF then
+    return "\\ufffd"
+  end
+  if cp <= 0xFFFF then
+    return string.format("\\u%04x", cp)
+  end
+  local v = cp - 0x10000
+  local hi = 0xD800 + math.floor(v / 0x400)
+  local lo = 0xDC00 + (v % 0x400)
+  return string.format("\\u%04x\\u%04x", hi, lo)
+end
+
+--- 安全编码 JSON 字符串：非 ASCII 统一转 \uXXXX，非法 UTF-8 字节替换为 U+FFFD。
 local function json_encode_string(s)
-  local out = s:gsub('[%z\1-\31\\"]', function(c)
-    local map = {
-      ['"'] = '\\"',
-      ["\\"] = "\\\\",
-      ["\b"] = "\\b",
-      ["\f"] = "\\f",
-      ["\n"] = "\\n",
-      ["\r"] = "\\r",
-      ["\t"] = "\\t",
-    }
-    return map[c] or string.format("\\u%04x", c:byte())
-  end)
-  return '"' .. out .. '"'
+  local out = {}
+  local i = 1
+  local len = #s
+  while i <= len do
+    local b = s:byte(i)
+    if b < 0x80 then
+      if b == 0x22 then
+        out[#out + 1] = '\\"'
+      elseif b == 0x5C then
+        out[#out + 1] = "\\\\"
+      elseif b == 0x08 then
+        out[#out + 1] = "\\b"
+      elseif b == 0x0C then
+        out[#out + 1] = "\\f"
+      elseif b == 0x0A then
+        out[#out + 1] = "\\n"
+      elseif b == 0x0D then
+        out[#out + 1] = "\\r"
+      elseif b == 0x09 then
+        out[#out + 1] = "\\t"
+      elseif b < 0x20 or b == 0x7F then
+        out[#out + 1] = string.format("\\u%04x", b)
+      else
+        out[#out + 1] = string.char(b)
+      end
+      i = i + 1
+    else
+      local cp, next_i = utf8_decode_char(s, i)
+      if cp then
+        out[#out + 1] = utf8_codepoint_to_escape(cp)
+        i = next_i
+      else
+        out[#out + 1] = "\\ufffd"
+        i = i + 1
+      end
+    end
+  end
+  return '"' .. table.concat(out) .. '"'
 end
 
 local function json_encode_value(v)

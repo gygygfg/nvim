@@ -40,9 +40,10 @@ opt.expandtab = true
 -- 支持 24 位彩色
 opt.termguicolors = true
 
--- 启用折叠
+-- 启用折叠（缩进驱动：层级 = 缩进 / shiftwidth，由 core.folding 保证与缩进设置同步）
 opt.foldenable = true
 opt.foldmethod = "indent"
+opt.foldlevel = 99 -- 默认展开所有折叠
 -- 最小的自动折叠行数
 opt.foldminlines = 2
 

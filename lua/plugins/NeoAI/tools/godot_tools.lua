@@ -5,6 +5,22 @@
 -- 工具函数签名：func(args, on_success, on_error)
 local M = {}
 
+--- 安全调用 vim.fs.root：无名缓冲区或 cwd 已删除（uv.cwd() 返回 nil）时
+--- vim.fs.abspath 会断言失败，这里降级为返回 nil。
+--- @param bufnr integer
+--- @param markers string[]
+--- @return string|nil
+local function safe_fs_root(bufnr, markers)
+  if vim.api.nvim_buf_get_name(bufnr) == "" then
+    return nil
+  end
+  local ok, root = pcall(vim.fs.root, bufnr, markers)
+  if ok then
+    return root
+  end
+  return nil
+end
+
 
 
 -- ============================================================================
@@ -976,7 +992,7 @@ end
 --- @return table[] 工具定义列表，每项包含 name, func, description, parameters, category, async
 function M.get_tools()
   -- 检查是否在 Godot 项目中，如果不在则返回空列表
-  local root = vim.fs.root(0, { "project.godot" })
+  local root = safe_fs_root(0, { "project.godot" })
   if not root then
     return {}
   end

@@ -17,13 +17,13 @@ require("NeoAI").setup({
   },
   ai = {
     -- 兜底模型（未配置的模式 / "auto" 解析时回退到 registry 默认）
-    default_model = "deepseek-v4-flash-vision-exp",
+    default_model = "deepseek-flash",
     -- 按模式（CHAT / PLAN / AUTO）分别配置 provider/model；
     -- 未写的 temperature/max_tokens/stream 沿用默认值。
     modes = {
-      chat = { provider = "deepseek", model = "deepseek-v4-flash-vision-exp" },
+      chat = { provider = "deepseek", model = "deepseek-flash" },
       plan = { provider = "deepseek", model = "deepseek-flash" },
-      auto = { provider = "deepseek", model = "deepseek-v4-flash-vision-exp" },
+      auto = { provider = "deepseek", model = "deepseek-flash" },
     },
   },
   tools = {

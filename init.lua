@@ -43,6 +43,8 @@ require("core.notify_config")
 require("core.options")
 require("core.keymaps")
 require("core.autocommands")
+-- 缩进折叠：折叠层级跟随 shiftwidth，缩进选项变化时自动重算（详见 lua/core/folding.lua）
+require("core.folding").setup()
 
 -- 加载自动拼写纠正模块
 local spell_ok, spell = pcall(require, "core.spell")

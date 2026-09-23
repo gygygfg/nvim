@@ -20,6 +20,8 @@ local function hash_string(str)
 end
 
 -- 向上查找项目根目录
+-- 优先从当前打开文件所在目录出发（避免受 Neovim 启动目录 cwd 影响），
+-- 找不到再回退到 cwd。
 local function find_root()
   local patterns = {
     "pom.xml",
@@ -29,13 +31,27 @@ local function find_root()
     "settings.gradle.kts",
     "mvnw",
     "gradlew",
+    -- Eclipse/JDT 项目标记（无构建工具时的源码根配置）
+    ".project",
+    ".classpath",
     ".git",
     "WORKSPACE",
     "WORKSPACE.bazel",
   }
-  local found = vim.fs.find(patterns, { upward = true, path = vim.fn.getcwd() })[1]
-  if found then
-    return vim.fs.dirname(found)
+
+  -- 候选起点：当前文件所在目录 -> cwd
+  local roots = {}
+  local name = vim.api.nvim_buf_get_name(vim.api.nvim_get_current_buf())
+  if name ~= "" then
+    roots[#roots + 1] = vim.fs.dirname(name)
+  end
+  roots[#roots + 1] = vim.fn.getcwd()
+
+  for _, path in ipairs(roots) do
+    local found = vim.fs.find(patterns, { upward = true, path = path })[1]
+    if found then
+      return vim.fs.dirname(found)
+    end
   end
   return vim.fn.getcwd()
 end
@@ -137,7 +153,25 @@ return {
   name = "jdtls",
   cmd = cmd_factory,
   filetypes = { "java" },
-  root_dir = find_root,
+  -- Neovim 0.12：函数式 root_dir 需为 (bufnr, on_dir) 回调签名，
+  -- 而本框架通过 vim.lsp.start() 直接启动，不会调用该回调，
+  -- 会把 root_dir 原样当成 Funcref（导致 checkhealth 报 E729）。
+  -- 改用静态 root_markers：框架已透传 _root_markers，core 会解析为字符串 root。
+  root_markers = {
+    "pom.xml",
+    "build.gradle",
+    "build.gradle.kts",
+    "settings.gradle",
+    "settings.gradle.kts",
+    "mvnw",
+    "gradlew",
+    -- Eclipse/JDT 项目标记（无构建工具时的源码根配置）
+    ".project",
+    ".classpath",
+    ".git",
+    "WORKSPACE",
+    "WORKSPACE.bazel",
+  },
   capabilities = capabilities,
   init_options = {
     -- 由 DAP 插件在启动前注入 java-debug/java-test 的 bundles

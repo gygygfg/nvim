@@ -85,10 +85,11 @@ local function setup()
       },
     },
 
-    -- 代码折叠
+    -- 代码折叠：禁用 treesitter 语法折叠，改用 core.folding 的缩进折叠，
+    -- 使折叠层级与 shiftwidth 一致（避免「缩进 2 格、折叠仍按 4 格」）。
     fold = {
-      enable = true,
-      disable = { "markdown" }, -- 某些语言可能需要禁用折叠
+      enable = false,
+      disable = { "markdown" },
     },
 
     -- 文本对象（需要 nvim-treesitter-textobjects 插件）
@@ -115,10 +116,7 @@ local function setup()
     },
   })
 
-  -- 启用代码折叠
-  vim.wo.foldmethod = "expr"
-  vim.wo.foldexpr = "v:lua.vim.treesitter.foldexpr()"
-  vim.wo.foldlevel = 99 -- 默认展开所有折叠
+  -- 折叠由 core.folding 统一按缩进处理（不再设置 treesitter foldexpr）。
 
   -- 彩虹括号配置 (rainbow-delimiters.nvim)
   -- 使用新的 API 替代 vim.g.rainbow_active
