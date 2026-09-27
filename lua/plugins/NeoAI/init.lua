@@ -4,10 +4,18 @@ vim.pack.add({
   gh("MeanderingProgrammer/render-markdown.nvim"),
 })
 
--- 加载本地插件 NeoAI（通过符号链接到 packpath）。
+-- 加载 NeoAI：优先本地开发目录 /root/NeoAI，否则从 GitHub 安装。
 -- 命令（NeoAIOpen/Chat/Tree/Close/...）与全局快捷键（<leader>aa/ac/at/aq）
 -- 均由插件 setup() 内联注册，这里只需配置。
-vim.cmd("packadd NeoAI")
+local local_neoai = "/root/NeoAI"
+if vim.fn.filereadable(local_neoai .. "/lua/NeoAI/init.lua") == 1 then
+  -- 本地存在：挂到 runtimepath，require("NeoAI") 直接命中源码（实时生效）
+  vim.opt.rtp:prepend(local_neoai)
+else
+  -- 本地不存在：从 GitHub 安装并 packadd
+  vim.pack.add({ gh("gygygfg/NeoAI") })
+  vim.cmd("packadd NeoAI")
+end
 
 local godot_tools = require("plugins.NeoAI.tools.godot_tools")
 
@@ -21,8 +29,8 @@ require("NeoAI").setup({
     -- 按模式（CHAT / PLAN / AUTO）分别配置 provider/model；
     -- 未写的 temperature/max_tokens/stream 沿用默认值。
     modes = {
-      chat = { provider = "deepseek", model = "deepseek-flash" },
-      plan = { provider = "deepseek", model = "deepseek-flash" },
+      chat = { provider = "deepseek", model = "deepseek-v4-flash-vision-exp" },
+      plan = { provider = "deepseek", model = "deepseek-v4-flash-vision-exp" },
       auto = { provider = "deepseek", model = "deepseek-flash" },
     },
   },
