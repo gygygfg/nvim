@@ -182,6 +182,56 @@ vim.api.nvim_create_autocmd("VimEnter", {
     vim.keymap.set("n", "<leader>gb", "<cmd>Gblame<CR>", { desc = "[Git] 追溯" })
     vim.keymap.set("n", "<leader>gp", "<cmd>Git push<CR>", { desc = "[Git] 推送" })
     vim.keymap.set("n", "<leader>gl", "<cmd>Git pull<CR>", { desc = "[Git] 拉取" })
+
+    -- 拉取远程最新分支并覆盖本地（fetch + reset --hard，丢弃本地所有改动）
+    vim.keymap.set("n", "<leader>gL", function()
+      local branch_output = vim.fn.system("git rev-parse --abbrev-ref HEAD"):gsub("\n", "")
+
+      -- 检查是否是分离头指针状态
+      if branch_output == "HEAD" then
+        vim.notify("❌ 当前处于分离头指针状态，无法覆盖本地", vim.log.levels.ERROR)
+        return
+      end
+
+      local branch = branch_output
+
+      -- 二次确认，避免误操作丢失本地改动
+      vim.ui.input({ prompt = "⚠️  将用 origin/" .. branch .. " 覆盖本地（丢弃所有本地改动）? (y/N): " }, function(confirm)
+        if not confirm or confirm:lower() ~= "y" then
+          vim.notify("❌ 操作已取消", vim.log.levels.INFO)
+          return
+        end
+
+        -- 先 fetch 最新远程分支
+        vim.fn.jobstart({ "git", "fetch", "origin", branch }, {
+          on_exit = function(_, fetch_code)
+            if fetch_code ~= 0 then
+              vim.notify("❌ git fetch 失败，请检查网络连接或权限", vim.log.levels.ERROR)
+              return
+            end
+
+            -- 用远程分支硬覆盖本地
+            vim.fn.jobstart({ "git", "reset", "--hard", "origin/" .. branch }, {
+              on_exit = function(_, reset_code)
+                if reset_code == 0 then
+                  vim.notify("✅ 已用 origin/" .. branch .. " 覆盖本地", vim.log.levels.INFO)
+                  vim.cmd("edit!") -- 重新加载当前文件，同步磁盘内容
+                else
+                  vim.notify("❌ git reset --hard 失败", vim.log.levels.ERROR)
+                end
+              end,
+              on_stderr = function(_, data)
+                smart_git_error_handler(data, "覆盖错误")
+              end,
+            })
+          end,
+          on_stderr = function(_, data)
+            smart_git_error_handler(data, "拉取错误")
+          end,
+        })
+      end)
+    end, { desc = "[Git] 拉取远程最新分支并覆盖本地" })
+
     vim.keymap.set("n", "<leader>gw", "<cmd>Gwrite<CR>", { desc = "[Git] 暂存文件" })
     vim.keymap.set("n", "<leader>gr", "<cmd>Gread<CR>", { desc = "[Git] 检出文件" })
 
