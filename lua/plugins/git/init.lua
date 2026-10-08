@@ -336,16 +336,28 @@ vim.api.nvim_create_autocmd("VimEnter", {
 
       -- 自动解决 rebase 冲突并继续的函数（保留本地分支版本，即 --theirs）
       local start_push
-      local function auto_resolve_and_continue()
-        -- 检查是否仍在 rebase 过程中
-        local in_rebase = vim.fn.system("git rev-parse --git-dir") .. "/rebase-merge"
-        if vim.fn.isdirectory(in_rebase) == 0 then
-          in_rebase = vim.fn.system("git rev-parse --git-dir") .. "/rebase-apply"
-        end
-        if vim.fn.isdirectory(in_rebase) == 0 then
-          -- rebase 已完成，继续推送
-          vim.notify("✅ rebase 已完成，正在推送...", vim.log.levels.INFO)
-          start_push()
+
+      -- 取 git 目录并去掉末尾换行：system() 输出带 \n，
+      -- 直接拼接会得到 ".git\n/rebase-merge" 导致目录检测永远失败
+      local function git_dir()
+        return (vim.fn.system("git rev-parse --git-dir"):gsub("%s+$", ""))
+      end
+
+      -- 是否正处于 rebase 过程中
+      local function in_rebase()
+        local gd = git_dir()
+        return vim.fn.isdirectory(gd .. "/rebase-merge") == 1
+          or vim.fn.isdirectory(gd .. "/rebase-apply") == 1
+      end
+
+      local function auto_resolve_and_continue(resolving)
+        -- resolving 为真表示从上一轮 rebase --continue 之后递归进来
+        if not in_rebase() then
+          if resolving then
+            -- rebase 已完成，继续推送
+            vim.notify("✅ rebase 已完成，正在推送...", vim.log.levels.INFO)
+            start_push()
+          end
           return
         end
 
@@ -397,7 +409,24 @@ vim.api.nvim_create_autocmd("VimEnter", {
               return
             end
             -- 继续下一轮
-            auto_resolve_and_continue()
+            auto_resolve_and_continue(true)
+          end,
+        })
+      end
+
+      -- 强制推送：忽略远程，直接以本地分支覆盖远程（--force-with-lease 更安全）
+      local function reset_remote_to_local()
+        vim.notify("⚙️  尝试强制推送本地分支覆盖远程...", vim.log.levels.WARN)
+        vim.fn.jobstart({ "git", "push", "--force-with-lease", "origin", branch }, {
+          on_exit = function(_, code)
+            if code == 0 then
+              vim.notify("✅ 已强制覆盖远程分支 " .. branch, vim.log.levels.INFO)
+            else
+              vim.notify("❌ 强制推送失败，请检查网络连接或权限", vim.log.levels.ERROR)
+            end
+          end,
+          on_stderr = function(_, data)
+            smart_git_error_handler(data, "推送错误")
           end,
         })
       end
@@ -409,7 +438,18 @@ vim.api.nvim_create_autocmd("VimEnter", {
         local ahead_check = vim.fn.system("git rev-list --count origin/" .. branch .. "..HEAD 2>/dev/null || echo 0")
         local behind_check = vim.fn.system("git rev-list --count HEAD..origin/" .. branch .. " 2>/dev/null || echo 0")
 
-        if tonumber(ahead_check) == 0 then
+        -- 对象库损坏/引用损坏时 rev-list 会失败并返回非数字（如 fatal 信息或空），
+        -- 此时不要把错误当成“无需推送”而静默返回
+        local ahead_num = tonumber((ahead_check:gsub("%s+", "")))
+        if not ahead_num then
+          vim.notify(
+            "❌ 无法计算与远程的差异（本地仓库可能损坏），终止推送。请先修复仓库。",
+            vim.log.levels.ERROR
+          )
+          return
+        end
+
+        if ahead_num == 0 then
           -- 静默模式：不显示没有需要推送的通知
           -- vim.notify("ℹ️  没有需要推送的更改", vim.log.levels.INFO)
           return
@@ -422,31 +462,50 @@ vim.api.nvim_create_autocmd("VimEnter", {
               vim.notify("✅ 分支 " .. branch .. " 已推送", vim.log.levels.INFO)
             else
               vim.notify("❌ git push 失败，请检查网络连接或权限", vim.log.levels.ERROR)
-
-              -- 显示推送失败的原因
-              vim.fn.jobstart({ "git", "push", "origin", branch, "--verbose" }, {
-                on_stderr = function(_, data)
-                  smart_git_error_handler(data, "推送错误")
-                end,
-              })
+              reset_remote_to_local()
             end
           end,
         })
       end
 
+      local pull_stderr = {}
       vim.fn.jobstart({ "git", "pull", "--rebase", "origin", branch }, {
         -- 使用异步执行避免阻塞界面，添加错误处理
         on_exit = function(_, exit_code)
-          if exit_code ~= 0 then
-            vim.notify("❌ git pull --rebase 失败，尝试自动解决冲突...", vim.log.levels.WARN)
-            auto_resolve_and_continue()
+          if exit_code == 0 then
+            -- pull 直接成功，开始推送
+            start_push()
             return
           end
 
-          -- pull 直接成功，开始推送
-          start_push()
+          -- 失败时区分「冲突」与「其他错误」，避免把对象损坏/网络等错误误判为成功
+          local err_text = table.concat(pull_stderr, "\n")
+          local unmerged = vim.fn.system("git ls-files -u")
+          local is_conflict = in_rebase()
+            or unmerged ~= ""
+            or err_text:match("CONFLICT")
+            or err_text:match("Automatic merge failed")
+            or err_text:match("needs merge")
+
+          if not is_conflict then
+            -- 非冲突失败：不进入自动解决（真实错误已由 on_stderr 输出）
+            vim.notify(
+              "❌ git pull --rebase 失败（非冲突），直接以本地强制覆盖远程",
+              vim.log.levels.ERROR
+            )
+            reset_remote_to_local()
+            return
+          end
+
+          vim.notify("⚠️  git pull --rebase 出现冲突，尝试自动解决...", vim.log.levels.WARN)
+          auto_resolve_and_continue(false)
         end,
         on_stderr = function(_, data)
+          for _, line in ipairs(data) do
+            if line ~= "" then
+              table.insert(pull_stderr, line)
+            end
+          end
           smart_git_error_handler(data, "rebase 错误")
         end,
       })
