@@ -29,8 +29,8 @@ require("NeoAI").setup({
     -- 按模式（CHAT / PLAN / AUTO）分别配置 provider/model；
     -- 未写的 temperature/max_tokens/stream 沿用默认值。
     modes = {
-      chat = { provider = "deepseek", model = "deepseek-v4-flash-vision-exp" },
-      plan = { provider = "deepseek", model = "deepseek-v4-flash-vision-exp" },
+      chat = { provider = "deepseek", model = "deepseek-flash" },
+      plan = { provider = "deepseek", model = "deepseek-v4-pro" },
       auto = { provider = "deepseek", model = "deepseek-flash" },
     },
   },

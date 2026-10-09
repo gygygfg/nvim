@@ -616,19 +616,23 @@ function M.generate_ai_commit_message(callback, options)
     return
   end
 
-  -- 限制 diff 长度，避免 token 超限
-  local max_diff_length = 8000
-  if #diff_output > max_diff_length then
-    diff_output = diff_output:sub(1, max_diff_length) .. "\n... (truncated)"
+  -- 限制 diff 长度，避免给 AI 过长上下文（超过 2000 字按字符截断）
+  local max_diff_chars = 2000
+  if vim.fn.strchars(diff_output) > max_diff_chars then
+    diff_output = vim.fn.strcharpart(diff_output, 0, max_diff_chars) .. "\n... (truncated)"
   end
 
   -- 构建 AI 提示词
+  -- 要点：输出「简短但全面」的提交信息，聚焦实际改动内容；
+  -- 不要因为顺带更新了文档（docs/docx 等）就笼统地写“更新文档”。
   local prompt = [[请根据以下 git diff 信息，生成一个简洁的提交信息。
   要求：
-  1. 使用中文
-  2. 不超过 20 个字符
-  3. 使用 conventional commit 格式（如：feat: add new feature）
-  4. 准确概括代码变更
+  1. 使用中文，采用 conventional commit 格式（如：feat: 新增xx、fix: 修复xx、docs: 补充xx说明）
+  2. 用一句话精炼概括本次变更，尽量简短（不超过 50 个字符，越精炼越好）
+  3. 描述“实际改了什么”，即变动的核心内容或目的，不要笼统地写“更新文档”“修改代码”之类
+  4. 即使改动涉及文档，也要点明文档的具体内容（如：补充配置示例、更新 API 说明），不要因为顺带更新了文档就只写 docs/docx
+  5. 若代码变更是主体，忽略其中顺带的文档、格式、注释等次要改动，聚焦核心变更
+  6. 只输出提交信息本身，不要加引号、代码块或任何多余解释
 
   Git diff:
   ]] .. diff_output .. "\n\n提交信息："
@@ -656,7 +660,7 @@ function M.generate_ai_commit_message(callback, options)
     messages = {
       {
         role = "system",
-        content = "你是一个专业的 Git 提交信息生成助手，擅长根据代码变更生成简洁、规范的中文 commit message。",
+        content = "你是一个专业的 Git 提交信息生成助手，擅长根据代码变更生成简洁、规范的中文 commit message。请聚焦变更的实际内容做精炼概括，避免「更新文档/更新代码」等笼统措辞。",
       },
       { role = "user", content = prompt },
     },
