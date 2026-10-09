@@ -310,6 +310,86 @@ vim.api.nvim_create_user_command("LspRestartAll", function()
   end, 1000)
 end, { desc = "重启所有 LSP 客户端" })
 
+-- jdtls 的 Eclipse workspace 损坏特征（与 configs/jdtls.lua 保持一致）
+local JDTLS_CORRUPTION_MARKERS = {
+  "asBackwardDelta",
+  "NoDataDeltaNode",
+  "DeltaDataTree.reroot",
+  "ElementTree.immutable",
+}
+
+--- 扫描单个 workspace 目录是否损坏
+---@param ws string
+---@return boolean
+local function workspace_is_corrupt(ws)
+  local log = ws .. "/.metadata/.log"
+  if vim.fn.filereadable(log) ~= 1 then
+    return false
+  end
+  local ok, lines = pcall(vim.fn.readfile, log)
+  if not ok or type(lines) ~= "table" then
+    return false
+  end
+  for _, line in ipairs(lines) do
+    for _, marker in ipairs(JDTLS_CORRUPTION_MARKERS) do
+      if line:find(marker, 1, true) then
+        return true
+      end
+    end
+  end
+  return false
+end
+
+vim.api.nvim_create_user_command("LspResetJavaWorkspace", function(args)
+  local base = vim.fn.stdpath("cache") .. "/jdtls/workspace"
+  if vim.fn.isdirectory(base) ~= 1 then
+    vim.notify("[LSP] 无 jdtls workspace 目录: " .. base, vim.log.levels.INFO)
+    return
+  end
+
+  local all = args.bang -- 带 ! 时清空全部，否则只清损坏的
+  local entries = vim.fn.readdir(base)
+  local removed, kept = {}, {}
+  for _, name in ipairs(entries) do
+    local ws = base .. "/" .. name
+    if vim.fn.isdirectory(ws) == 1 then
+      if all or workspace_is_corrupt(ws) then
+        vim.fn.delete(ws, "rf")
+        removed[#removed + 1] = name
+      else
+        kept[#kept + 1] = name
+      end
+    end
+  end
+
+  local msg
+  if #removed == 0 then
+    msg = ("[LSP] 未发现损坏的 jdtls workspace（共 %d 个）"):format(#kept)
+    vim.notify(msg, vim.log.levels.INFO)
+    return
+  end
+  msg = ("[LSP] 已重置 jdtls workspace: %s"):format(table.concat(removed, ", "))
+  vim.notify(msg, vim.log.levels.WARN)
+
+  -- 重启已附着的 jdtls，让当前缓冲区用全新 workspace 重新索引
+  local restarted = false
+  for _, c in ipairs(vim.lsp.get_clients({ name = "jdtls" })) do
+    c:stop()
+    restarted = true
+  end
+  if restarted then
+    vim.defer_fn(function()
+      for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+        if vim.api.nvim_buf_is_valid(bufnr) then
+          vim.b[bufnr].lsp_started = nil
+        end
+      end
+      servers.register_all()
+      servers.enable_all()
+    end, 500)
+  end
+end, { bang = true, desc = "重置 jdtls workspace 缓存（! 清空全部，否则仅清损坏的）" })
+
 -- 暴露给外部模块（如 plugins/godot.lua）
 M.servers = servers
 M.memory = memory

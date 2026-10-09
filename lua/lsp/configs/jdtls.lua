@@ -19,6 +19,40 @@ local function hash_string(str)
   return string.format("%08x", h)
 end
 
+-- Eclipse workspace 损坏特征（出现在 .metadata/.log 的崩溃堆栈中）。
+-- 一旦命中，说明该项目的 workspace 状态树已损坏，jdtls 每次启动都会卡在
+-- SaveManager.restore 而无法完成 initialize（表现为“没有激活的 LSP 服务”）。
+-- 注意：workspace 目录名 = hash(项目根)，是确定性的，故损坏是“粘性”的——
+-- 不重置的话每次打开同一项目都会复用坏缓存并复现。
+local CORRUPTION_MARKERS = {
+  "asBackwardDelta",
+  "NoDataDeltaNode",
+  "DeltaDataTree.reroot",
+  "ElementTree.immutable",
+}
+
+-- 启动前自愈：若检测到 workspace 损坏，则删除整个 workspace 目录，
+-- 让 jdtls 下次以全新状态重建（代价仅为一次重新索引）。
+local function heal_corrupt_workspace(workspace)
+  local log = workspace .. "/.metadata/.log"
+  if vim.fn.filereadable(log) ~= 1 then
+    return
+  end
+  local ok, lines = pcall(vim.fn.readfile, log)
+  if not ok or type(lines) ~= "table" then
+    return
+  end
+  for _, line in ipairs(lines) do
+    for _, marker in ipairs(CORRUPTION_MARKERS) do
+      if line:find(marker, 1, true) then
+        vim.notify("[LSP] 检测到 jdtls workspace 损坏，已重置: " .. workspace, vim.log.levels.WARN)
+        vim.fn.delete(workspace, "rf")
+        return
+      end
+    end
+  end
+end
+
 -- 向上查找项目根目录
 -- 优先从当前打开文件所在目录出发（避免受 Neovim 启动目录 cwd 影响），
 -- 找不到再回退到 cwd。
@@ -101,6 +135,9 @@ local function build_cmd()
 
   local root = find_root()
   local workspace = vim.fn.stdpath("cache") .. "/jdtls/workspace/" .. hash_string(root)
+  -- 若上一次运行留下损坏的 workspace，启动前先重置，避免 jdtls 卡在
+  -- SaveManager.restore 而永远无法附着（详见 heal_corrupt_workspace）。
+  heal_corrupt_workspace(workspace)
   vim.fn.mkdir(workspace, "p")
 
   local cmd = {
