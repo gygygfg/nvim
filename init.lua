@@ -80,5 +80,11 @@ require("plugins-manager").setup({
   -- print_list = true -- 打印可用插件列表
 })
 
+-- 插件加载完成后再刷新一次 LSP：此刻 cmp_nvim_lsp 已可用，
+-- 用它重新烘焙 capabilities（require("lsp").setup() 时 cmp 尚未加载）。
+pcall(function()
+  require("lsp").refresh()
+end)
+
 -- 通知用户配置已加载
 vim.notify("Neovim 配置加载完成", vim.log.levels.INFO)

@@ -25,42 +25,21 @@ local function safe_fs_root(bufnr, markers)
   return nil
 end
 
--- 将 gdscript 注册到主 LSP 系统，使其不被跳过
+-- GDScript 的 LSP 集成
 -- godotdev.nvim 使用 vim.lsp.config["gdscript"] + vim.lsp.enable("gdscript") 启动 LSP，
--- 服务名称为 "godot_editor"（见 godotdev/lsp.lua）
--- 主 LSP 系统使用白名单(filetype_mappings)，gdscript 不在其中时会将缓冲区标记为
--- lsp_started=true 并跳过，导致 LSP 按键映射和格式化等功能无法应用。
-local lsp_module_ok, lsp_module = pcall(require, "lsp")
-if lsp_module_ok then
-  -- 注册 gdscript 相关文件类型到 LSP 系统
-  lsp_module.filetype_mappings["gdscript"] = { "godot_editor" }
-  lsp_module.filetype_mappings["gdresource"] = { "godot_editor" }
-  lsp_module.filetype_mappings["gdshader"] = { "godot_editor" }
-
-  -- 添加 GDScript 格式化器
-  lsp_module.formatters_by_ft["gdscript"] = { "gdscript-formatter" }
-  lsp_module.formatters_by_ft["gdresource"] = { "gdscript-formatter" }
-  lsp_module.formatters_by_ft["gdshader"] = { "gdscript-formatter" }
-
-  -- 预注册 godot_editor 服务器配置到 _server_configs，
-  -- 让主 LSP 系统在 start_server_with_config 时能直接使用。
-  -- 注意：由于此时 godotdev 尚未 setup，vim.lsp.config["gdscript"] 可能为空，
-  -- 实际注册延迟到 setup_godotdev() 中 godotdev.setup() 之后完成。
-  -- 这里先确保 _server_configs 表存在。
-  if not lsp_module._server_configs then
-    lsp_module._server_configs = {}
-  end
-end
+-- 服务名称为 "godot_editor"（见 godotdev/lsp.lua）。
+-- 说明：GDScript 的 filetype 映射与格式化器已集中到 lsp/config.lua
+-- （gdscript/gdresource/gdshader → godot_editor；gdscript-formatter）。
+-- godotdev.nvim 自身通过 vim.lsp.config["gdscript"] + vim.lsp.enable("gdscript")
+-- 注册并启动 godot_editor，故此处无需再向主 LSP 系统注入映射/配置。
 
 -- 检测是否是 Godot 项目
 local function is_godot_project()
   return safe_fs_root(0, { "project.godot" }) ~= nil
 end
 
--- 清除 gdscript 缓冲区的 lsp_started 标记，让主 LSP 系统可以正确附加
--- 函数已增强：当找不到已存在的 godot_editor 客户端时，会通过主 LSP 系统的
--- start_lsp_for_filetype 重新触发完整的 LSP 启动流程（包括启动新客户端）。
--- 
+-- 清除 gdscript 缓冲区的 lsp_started 标记，确保 LSP 客户端正确附加
+-- 当找不到存活的 godot_editor 客户端时，通过原生 vim.lsp.enable("gdscript") 重新启用。
 local function ensure_gdscript_lsp_attached()
   local gdscript_bufs = {}
   for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
@@ -98,23 +77,7 @@ local function ensure_gdscript_lsp_attached()
       end
     end
 
-    -- 通过主 LSP 系统重新启动 LSP 客户端
-    -- 使用 pcall 获取主 LSP 模块并调用 start_lsp_for_filetype
-    local lsp_ok, lsp_mod = pcall(require, "lsp")
-    if lsp_ok and lsp_mod.start_lsp_for_filetype then
-      for _, bufnr in ipairs(gdscript_bufs) do
-        if vim.api.nvim_buf_is_valid(bufnr) then
-          local ft = vim.bo[bufnr].filetype
-          -- 清除标记，让 LSP 系统可以重新处理此缓冲区
-          vim.b[bufnr].lsp_started = nil
-          -- 调用主 LSP 系统的启动函数（包含 start_server_with_config）
-          lsp_mod.start_lsp_for_filetype(ft, bufnr)
-        end
-      end
-      return
-    end
-
-    -- 回退：直接使用 Neovim 内置 LSP 启用
+    -- 通过 Neovim 内置 LSP 重新启用（godotdev 已注册 vim.lsp.config["gdscript"]）
     if vim.lsp.config["gdscript"] and vim.lsp.config["gdscript"].cmd then
       vim.lsp.enable("gdscript")
       -- 给 autocmd 一个机会执行
@@ -350,18 +313,8 @@ local function setup_godotdev()
     },
   })
 
-  -- godotdev.setup() 之后，将 vim.lsp.config["gdscript"] 的配置
-  -- 同步到主 LSP 系统的 _server_configs，使 start_server_with_config 可用
-  if lsp_module_ok and lsp_module then
-    local gd_lsp_config = vim.lsp.config["gdscript"]
-    if gd_lsp_config and gd_lsp_config.cmd then
-      if not lsp_module._server_configs then
-        lsp_module._server_configs = {}
-      end
-      lsp_module._server_configs["godot_editor"] = vim.deepcopy(gd_lsp_config)
-      lsp_module._server_configs["godot_editor"].filetypes = { "gdscript", "gd", "gdshader", "gdresource" }
-    end
-  end
+  -- godotdev.setup() 已通过 vim.lsp.config["gdscript"] + vim.lsp.enable("gdscript")
+  -- 完成原生注册与启用，无需再同步到主 LSP 系统。
 
   -- 先启动 Godot LSP 后台服务，确保端口就绪
   local server_started = start_godot_lsp_server()
@@ -1315,11 +1268,8 @@ vim.api.nvim_create_autocmd("FileType", {
       vim.defer_fn(function()
         if vim.api.nvim_buf_is_valid(args.buf) then
           vim.b[args.buf].lsp_started = nil
-          -- 通过主 LSP 系统触发完整的 LSP 启动/附加流程
-          local lsp_ok, lsp_mod = pcall(require, "lsp")
-          if lsp_ok and lsp_mod.start_lsp_for_filetype then
-            lsp_mod.start_lsp_for_filetype(args.match, args.buf)
-          end
+          -- 通过 Neovim 内置 LSP 确保 gdscript 已启用
+          pcall(vim.lsp.enable, "gdscript")
         end
       end, 500)
     end

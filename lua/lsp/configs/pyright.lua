@@ -12,6 +12,6 @@ return {
       },
     },
   },
-  root_dir = vim.fs.dirname(vim.fs.find({ "pyproject.toml", "setup.py", "requirements.txt", ".git" }, { upward = true })[1]),
+  root_markers = { "pyproject.toml", "setup.py", "requirements.txt", ".git" },
   filetypes = { "python" },
 }

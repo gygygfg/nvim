@@ -1,6 +1,8 @@
 -- ~/.config/nvim/lua/lsp/keymaps.lua
 -- LSP 键位：缓冲区级映射随 LspAttach 自动挂载；诊断跳转全局挂载
 
+local config = require("lsp.config")
+
 local M = {}
 
 local function buf_map(bufnr, mode, lhs, rhs, desc)
@@ -47,7 +49,18 @@ function M.setup()
   vim.api.nvim_create_autocmd("LspAttach", {
     group = vim.api.nvim_create_augroup("LspKeymaps", { clear = true }),
     callback = function(args)
-      on_attach(nil, args.buf)
+      local bufnr = args.buf
+      local ft = vim.bo[bufnr].filetype
+
+      -- 跳过语义：这些缓冲区不应挂 LSP 客户端与键位
+      if vim.b[bufnr].neoai_no_lsp or config.skip_filetypes[ft] then
+        for _, client in ipairs(vim.lsp.get_clients({ bufnr = bufnr })) do
+          vim.lsp.buf_detach_client(bufnr, client.id)
+        end
+        return
+      end
+
+      on_attach(nil, bufnr)
     end,
   })
 

@@ -2,7 +2,7 @@
 return {
   name = "clangd",
   cmd = { 'clangd', '--background-index', '--clang-tidy', '--header-insertion=iwyu', '--completion-style=detailed' },
-  root_dir = vim.fs.dirname(vim.fs.find({ 'compile_commands.json', 'compile_flags.txt', '.git' }, { upward = true })[1]),
+  root_markers = { 'compile_commands.json', 'compile_flags.txt', '.git' },
   filetypes = { "c", "cpp", "objc", "objcpp" },
   capabilities = {
     offsetEncoding = 'utf-16',

@@ -14,10 +14,18 @@ M.options = {
   -- 是否在保存时自动格式化
   auto_format = true,
 
-  -- 内存限制
+  -- 由外部插件（godotdev.nvim）托管的 LSP 服务器。
+  -- 这些服务器仍会注册到 vim.lsp.config，但不由本模块 vim.lsp.enable，
+  -- 避免与插件自身的启用逻辑产生重复客户端。
+  external_lsp_servers = {
+    godot_editor = true,
+  },
+
+  -- 内存限制（用于向各服务器注入 settings，不再作为启动门禁）
   memory_limit = {
     enabled = true,
     -- 最大并发 LSP 客户端数量（<=0 时按系统内存动态计算）
+    -- 注意：仅用于内存相关配置的换算参考，不再限制客户端启动数量
     max_concurrent_clients = 0,
     -- 每个客户端最大内存（MB，<=0 时按系统内存动态计算）
     max_memory_per_client = 0,
@@ -40,7 +48,6 @@ M.filetype_mappings = {
   json = { "jsonls" },
   jsonc = { "jsonls" },
   yaml = { "yamlls" },
-  yml = { "yamlls" },
 
   -- 系统编程
   c = { "clangd" },
@@ -61,6 +68,12 @@ M.filetype_mappings = {
   sh = { "bashls" },
   zsh = { "bashls" },
   bash = { "bashls" },
+
+  -- Godot（由 godotdev.nvim 托管，见 plugins/godot.lua；此处登记以驱动
+  -- 格式化与文档化映射，实际启用由 godotdev 通过 vim.lsp.enable("gdscript") 完成）
+  gdscript = { "godot_editor" },
+  gdresource = { "godot_editor" },
+  gdshader = { "godot_editor" },
 }
 
 -- 文件类型 -> 格式化器（conform.nvim）
@@ -75,7 +88,6 @@ M.formatters_by_ft = {
   css = { "prettierd", "prettier" },
   json = { "prettierd", "prettier" },
   yaml = { "yamlfmt" },
-  yml = { "yamlfmt" },
   markdown = { "prettierd", "prettier" },
   bash = { "shfmt" },
   sh = { "shfmt" },
@@ -86,6 +98,10 @@ M.formatters_by_ft = {
   java = { "google-java-format" },
   sql = { "sql-formatter" },
   tex = { "latexindent" },
+  -- Godot（conform 内置 gdscript-formatter）
+  gdscript = { "gdscript-formatter" },
+  gdresource = { "gdscript-formatter" },
+  gdshader = { "gdscript-formatter" },
   ["*"] = { "codespell" }, -- 所有文件类型做拼写检查
 }
 

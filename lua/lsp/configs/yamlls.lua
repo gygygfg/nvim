@@ -16,6 +16,6 @@ return {
       },
     },
   },
-  root_dir = vim.fs.dirname(vim.fs.find({ '.git' }, { upward = true })[1]),
+  root_markers = { '.git' },
   filetypes = { "yaml", "yml" },
 }

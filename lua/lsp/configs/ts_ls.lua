@@ -5,7 +5,7 @@ return {
   name = "ts_ls",
   cmd = { "typescript-language-server", "--stdio" },
   filetypes = { "javascript", "javascriptreact", "typescript", "typescriptreact" },
-  root_dir = vim.fs.dirname(vim.fs.find({ "tsconfig.json", "jsconfig.json", "package.json", ".git" }, { upward = true })[1]),
+  root_markers = { "tsconfig.json", "jsconfig.json", "package.json", ".git" },
   init_options = {
     preferences = {
       disableSuggestions = false,

@@ -13,6 +13,6 @@ return {
       completeUnimported = true,
     },
   },
-  root_dir = vim.fs.dirname(vim.fs.find({ 'go.mod', '.git' }, { upward = true })[1]),
+  root_markers = { 'go.mod', '.git' },
   filetypes = { "go", "gomod" },
 }
