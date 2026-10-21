@@ -113,6 +113,65 @@ local function smart_git_error_handler(data, error_type)
     vim.notify(error_type .. ": " .. stderr_text, vim.log.levels.WARN)
   end
 end
+-- 推送/拉取失败原因分类。
+-- 认证类错误（无凭据、密钥不可用、无 TTY 可提示）重试多少次都不会成功，
+-- 更不能用 force push 兜底；只有「远程已有本地没有的提交」这一种情况才适合
+-- 用 --force-with-lease 覆盖远程。两类错误的处理方式必须分开。
+local AUTH_ERROR_PATTERNS = {
+  "could not read Username",
+  "could not read Password",
+  "could not read from remote repository",
+  "Authentication failed",
+  "Invalid username or password",
+  "Support for password authentication was removed",
+  "Permission denied %(publickey",
+  "Permission to .- denied",
+  "Host key verification failed",
+  "terminal prompts disabled",
+  "No such device or address",
+}
+
+local NON_FAST_FORWARD_PATTERNS = {
+  "%[rejected%]",
+  "non%-fast%-forward",
+  "fetch first",
+  "Updates were rejected",
+  "stale info",
+  "cannot lock ref",
+}
+
+--- @param text string
+--- @return "auth"|"non_fast_forward"|"unknown"
+local function classify_git_error(text)
+  if not text or text == "" then
+    return "unknown"
+  end
+  for _, pattern in ipairs(AUTH_ERROR_PATTERNS) do
+    if text:find(pattern) then
+      return "auth"
+    end
+  end
+  for _, pattern in ipairs(NON_FAST_FORWARD_PATTERNS) do
+    if text:find(pattern) then
+      return "non_fast_forward"
+    end
+  end
+  return "unknown"
+end
+
+--- 认证失败时的统一提示：给出可执行的排查方向，并明确说明未动远程
+local function notify_auth_failure(action, err_text)
+  vim.notify(
+    "❌ "
+      .. action
+      .. " 失败：GitHub 认证不可用，已跳过强制推送（不会覆盖远程）。\n"
+      .. "  原因: "
+      .. (err_text:gsub("%s+$", ""))
+      .. "\n  排查: 1) 改用 SSH 远端 —— git remote set-url origin git@github.com:<owner>/<repo>.git 并确认 ssh -T git@github.com 通过；"
+      .. "2) 或配置凭据助手持久化 PAT。",
+    vim.log.levels.ERROR
+  )
+end
 
 -- 逐行解决 rebase 冲突文件：冲突块保留本地分支版本（theirs），其余保留远程改动
 local function resolve_conflict_file_local(file)
@@ -455,15 +514,45 @@ vim.api.nvim_create_autocmd("VimEnter", {
           return
         end
 
+        -- 收集 stderr 用于分类失败原因（认证失败 / 非快进被拒 / 其他）
+        local push_stderr = {}
         vim.fn.jobstart({ "git", "push", "origin", branch }, {
           on_exit = function(_, push_exit_code)
             if push_exit_code == 0 then
               -- 静默模式：只显示简短的成功通知
               vim.notify("✅ 分支 " .. branch .. " 已推送", vim.log.levels.INFO)
-            else
-              vim.notify("❌ git push 失败，请检查网络连接或权限", vim.log.levels.ERROR)
-              reset_remote_to_local()
+              return
             end
+
+            local err_text = table.concat(push_stderr, "\n")
+            local kind = classify_git_error(err_text)
+
+            -- 认证失败：重试与强制推送都不可能成功，直接给出真实原因
+            if kind == "auth" then
+              notify_auth_failure("git push", err_text)
+              return
+            end
+
+            vim.notify("❌ git push 失败，请检查网络连接或权限", vim.log.levels.ERROR)
+
+            -- 只有「非快进被拒」才用 --force-with-lease 覆盖远程；
+            -- 钩子拒绝/网络中断/对象损坏等其他失败一律保持远程不动
+            if kind == "non_fast_forward" then
+              reset_remote_to_local()
+            else
+              vim.notify(
+                "ℹ️  未识别为「非快进被拒」，已跳过强制推送以免误覆盖远程",
+                vim.log.levels.INFO
+              )
+            end
+          end,
+          on_stderr = function(_, data)
+            for _, line in ipairs(data) do
+              if line ~= "" then
+                table.insert(push_stderr, line)
+              end
+            end
+            smart_git_error_handler(data, "推送错误")
           end,
         })
       end
@@ -489,6 +578,11 @@ vim.api.nvim_create_autocmd("VimEnter", {
 
           if not is_conflict then
             -- 非冲突失败：不进入自动解决（真实错误已由 on_stderr 输出）
+            -- 先排除认证/凭据类失败：远程连都读不到时，强制覆盖本地版本毫无意义
+            if classify_git_error(err_text) == "auth" then
+              notify_auth_failure("git pull --rebase", err_text)
+              return
+            end
             vim.notify(
               "❌ git pull --rebase 失败（非冲突），直接以本地强制覆盖远程",
               vim.log.levels.ERROR
