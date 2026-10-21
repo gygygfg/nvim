@@ -216,8 +216,9 @@ return {
   },
   settings = {
     java = {
-      -- 关闭 jdtls 自带格式化，统一交给 conform.nvim (google-java-format)
-      format = { enabled = false },
+      -- 启用 jdtls 自带格式化：java 无可用 CLI formatter，conform 通过
+      -- lsp_format = "first" 调用 jdtls 的 documentFormattingProvider。
+      format = { enabled = true },
       signatureHelp = { enabled = true },
       completion = {
         favoriteStaticMembers = {

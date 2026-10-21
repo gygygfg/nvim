@@ -14,6 +14,18 @@ M.options = {
   -- 是否在保存时自动格式化
   auto_format = true,
 
+  -- 启动时自动用 Mason 安装缺失的 LSP 服务器 / 格式化工具。
+  -- 说明：headless 环境（#nvim_list_uis() == 0）不触发；离线或安装失败仅
+  -- 告警，绝不阻塞 Neovim 启动。任一子项置 false 即可关闭对应部分。
+  auto_install = {
+    -- 自动安装缺失的 LSP 服务器（依据 lsp_to_mason）
+    servers = true,
+    -- 自动安装缺失的格式化 / 检查工具（formatter_to_mason + linter_to_mason）
+    formatters = true,
+    -- 是否输出自动安装汇总通知（WARN 级别的失败提示不受此开关影响）
+    notify = true,
+  },
+
   -- 由外部插件（godotdev.nvim）托管的 LSP 服务器。
   -- 这些服务器仍会注册到 vim.lsp.config，但不由本模块 vim.lsp.enable，
   -- 避免与插件自身的启用逻辑产生重复客户端。
@@ -95,7 +107,8 @@ M.formatters_by_ft = {
   cpp = { "clang-format" },
   go = { "gofumpt", "goimports" },
   rust = { "rustfmt" },
-  java = { "google-java-format" },
+  -- java 不配置 CLI 格式化器：Termux(bionic) 无 glibc，google-java-format 原生
+  -- 二进制不可用（ENOENT），改用 jdtls 内置格式化（见 format.lua 的 lsp_format）。
   sql = { "sql-formatter" },
   tex = { "latexindent" },
   -- Godot（conform 内置 gdscript-formatter）
@@ -114,7 +127,6 @@ M.skip_filetypes = {
   help = true,
   qf = true,
   terminal = true,
-  codecompanion = true,
   neoai = true,
   [""] = true,
 }
@@ -148,7 +160,6 @@ M.formatter_to_mason = {
   gofumpt = "gofumpt",
   goimports = "gofmt",
   rustfmt = "rustfmt",
-  ["google-java-format"] = "google-java-format",
   ["sql-formatter"] = "sql-formatter",
   latexindent = "latexindent",
   codespell = "codespell",
@@ -183,6 +194,13 @@ M.formatter_args = {
   isort = { prepend_args = { "--profile", "black" } },
   shfmt = { prepend_args = { "-i", "2" } },
   ["clang-format"] = { prepend_args = { "--style", "{BasedOnStyle: Google, IndentWidth: 2}" } },
+  -- codespell 会无条件读取「当前工作目录」下的 pyproject.toml；若其 TOML 非法
+  -- （曾出现重复声明 [project]）会直接抛 TOMLDecodeError 崩溃。固定 cwd 到 state
+  -- 目录（无 pyproject.toml）以隔离该风险。副作用：不再自动采用项目级配置。
+  -- 注意：conform 要求 cwd 必须是 (config, ctx) -> string 的函数。
+  codespell = { cwd = function()
+    return vim.fn.stdpath("state")
+  end },
 }
 
 return M

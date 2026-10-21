@@ -126,6 +126,12 @@ function M.setup()
   require("lsp.format").setup()
 
   M.setup_mason()
+
+  -- 基于 Mason 的自动安装：先订阅安装成功事件，再在启动时补齐缺失的
+  -- LSP 服务器与格式化工具（headless 环境会被 auto_install 内部跳过）。
+  local install = require("lsp.install")
+  install.setup()
+  install.auto_install()
 end
 
 -- 插件加载完成后重新烘焙 capabilities。
@@ -151,19 +157,12 @@ local function ensure_mason_registry()
 end
 
 vim.api.nvim_create_user_command("LspInstallMissing", function()
-  local registry = ensure_mason_registry()
-  if not registry then
+  if not ensure_mason_registry() then
     return
   end
 
-  local count = 0
-  for _, mason_name in pairs(config.lsp_to_mason) do
-    local ok, pkg = pcall(registry.get_package, mason_name)
-    if ok and not pkg:is_installed() then
-      pkg:install()
-      count = count + 1
-    end
-  end
+  local install = require("lsp.install")
+  local count = install.install_missing(config.lsp_to_mason)
   vim.notify(
     count > 0 and ("[LSP] 已开始安装 " .. count .. " 个 LSP 服务器") or "[LSP] 所有 LSP 服务器已安装",
     vim.log.levels.INFO
@@ -171,27 +170,22 @@ vim.api.nvim_create_user_command("LspInstallMissing", function()
 end, { desc = "安装缺失的 LSP 服务器" })
 
 vim.api.nvim_create_user_command("FormatterInstallMissing", function()
-  local registry = ensure_mason_registry()
-  if not registry then
+  if not ensure_mason_registry() then
     return
   end
 
-  local seen, count = {}, 0
-  for _, mason_name in pairs(config.formatter_to_mason) do
-    if not seen[mason_name] then
-      seen[mason_name] = true
-      local ok, pkg = pcall(registry.get_package, mason_name)
-      if ok and not pkg:is_installed() then
-        pkg:install()
-        count = count + 1
-      end
-    end
-  end
+  local install = require("lsp.install")
+  local count = install.install_missing(config.formatter_to_mason)
   vim.notify(
     count > 0 and ("[LSP] 已开始安装 " .. count .. " 个格式化工具") or "[LSP] 所有格式化工具已安装",
     vim.log.levels.INFO
   )
 end, { desc = "安装缺失的格式化工具" })
+
+vim.api.nvim_create_user_command("LspAutoInstall", function()
+  -- 手动触发一次自动安装检查（复用启动时的同一逻辑）
+  require("lsp.install").auto_install()
+end, { desc = "手动触发一次缺失 LSP/格式化工具的自动安装检查" })
 
 vim.api.nvim_create_user_command("LspStatus", function()
   local bufnr = vim.api.nvim_get_current_buf()

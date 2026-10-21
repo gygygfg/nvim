@@ -6,6 +6,17 @@ local format_guard = require("core.format_guard")
 
 local M = {}
 
+--- 根据缓冲区 filetype 选择 conform 的 lsp_format 策略。
+--- java 没有可用的 CLI 格式化器（google-java-format 在 Termux 不可用），
+--- 且 formatters_by_ft["*"] = { "codespell" } 使 java 恒存在 CLI formatter，
+--- 故不能用 "fallback"（那不会触发 LSP），必须用 "first" 走 jdtls 内置格式化。
+---@param bufnr integer|nil
+---@return string
+local function lsp_format_for(bufnr)
+  local ft = vim.bo[bufnr or 0].filetype
+  return ft == "java" and "first" or "fallback"
+end
+
 function M.setup()
   local ok, conform = pcall(require, "conform")
   if not ok then
@@ -21,7 +32,7 @@ function M.setup()
       if not format_guard.is_formattable(bufnr) then
         return false
       end
-      return { timeout_ms = 1000, lsp_format = "fallback" }
+      return { timeout_ms = 1000, lsp_format = lsp_format_for(bufnr) }
     end,
 
     log_level = vim.log.levels.WARN,
@@ -33,7 +44,7 @@ function M.setup()
       vim.notify("[LSP] 当前缓冲区不可格式化（权限受限或特殊缓冲区）", vim.log.levels.WARN)
       return
     end
-    conform.format({ async = true, lsp_format = "fallback" })
+    conform.format({ async = true, lsp_format = lsp_format_for(0) })
   end, { noremap = true, silent = true, desc = "格式化文档" })
 
   -- 查看当前文件类型的格式化器
