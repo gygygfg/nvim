@@ -9,14 +9,6 @@ local mygroup = augroup("MyConfig", { clear = true })
 
 -- 文件类型相关设置
 
-vim.api.nvim_create_autocmd("UIEnter", {
-  -- 主题配置 - 启动时加载
-  once = true,
-  callback = function()
-    require("plugins.theme")
-  end,
-})
-
 vim.api.nvim_create_user_command("TelescopeFind", function()
   -- Telescope - 按需加载
   require("plugins.telescope").setup()

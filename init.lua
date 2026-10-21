@@ -41,6 +41,9 @@ vim.pack.add({
 -- 加载基础选项和按键映射
 require("core.notify_config")
 require("core.options")
+-- 尽早同步应用主题（tokyonight）：避免在后续较慢的初始化（LSP/虚拟环境/插件加载）
+-- 期间先渲染出默认配色再切换，造成“主题闪一下才出来”的现象。
+pcall(require, "plugins.theme")
 require("core.keymaps")
 require("core.autocommands")
 -- 缩进折叠：折叠层级跟随 shiftwidth，缩进选项变化时自动重算（详见 lua/core/folding.lua）

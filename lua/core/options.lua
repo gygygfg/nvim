@@ -6,6 +6,7 @@ opt.relativenumber = true -- 相对行号
 opt.signcolumn = "yes" -- 总是显示标记列
 opt.cursorline = true -- 高亮当前行
 opt.termguicolors = true -- 真彩色支持
+opt.background = "dark" -- 预设暗色背景，避免启动时先闪浅色再切到主题
 
 -- 编辑行为
 opt.expandtab = true -- Tab转空格
