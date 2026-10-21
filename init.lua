@@ -30,11 +30,17 @@ vim.pack.add({
   -- 界面增强
   gh("folke/noice.nvim"),
   gh("rcarriga/nvim-notify"),
-  -- AI 辅助
-  gh("github/copilot.vim"),
   -- 工具类
   gh("nvim-lua/popup.nvim"),
 })
+
+-- AI 辅助（copilot.vim）：可用内存低于阈值（默认 4 GB）时不加载。
+-- copilot.vim 会拉起 copilot-language-server，单个常驻约 200 MB，在小内存主机上
+-- 是整机内存被打满的主要贡献者（表现为 nvim 卡顿乃至 sshd 无法返回 SSH banner）。
+-- 需要时手动启用：:packadd copilot.vim。阈值与判定见 lua/core/resource_guard.lua。
+if require("core.resource_guard").decide("copilot.vim") then
+  vim.pack.add({ gh("github/copilot.vim") })
+end
 
 -- 3. 加载核心配置
 
