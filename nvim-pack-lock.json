@@ -8,6 +8,10 @@
       "rev": "642b0c595e11608b4c18219e93b88d7637af27bc",
       "src": "https://github.com/L3MON4D3/LuaSnip"
     },
+    "NeoAI": {
+      "rev": "9164c6616a6e4b98984daca45a22e5a463e581a3",
+      "src": "https://github.com/gygygfg/NeoAI"
+    },
     "bufferline.nvim": {
       "rev": "655133c3b4c3e5e05ec549b9f8cc2894ac6f51b3",
       "src": "https://github.com/akinsho/bufferline.nvim"
@@ -35,10 +39,6 @@
     "code_runner.nvim": {
       "rev": "eed10eb4953bc172d7652f30d289a4e575028a98",
       "src": "https://github.com/CRAG666/code_runner.nvim"
-    },
-    "codecompanion.nvim": {
-      "rev": "ed70638e9d0922177affc89a97c2d7bf338dac8f",
-      "src": "https://github.com/olimorris/codecompanion.nvim"
     },
     "conform.nvim": {
       "rev": "086a40dc7ed8242c03be9f47fbcee68699cc2395",
@@ -95,10 +95,6 @@
     "mason.nvim": {
       "rev": "44d1e90e1f66e077268191e3ee9d2ac97cc18e65",
       "src": "https://github.com/williamboman/mason.nvim"
-    },
-    "mcphub.nvim": {
-      "rev": "7cd5db330f41b7bae02b2d6202218a061c3ebc1f",
-      "src": "https://github.com/ravitemer/mcphub.nvim"
     },
     "mini.icons": {
       "rev": "5b9076dae1bfbe47ba4a14bc8b967cde0ab5d77e",
