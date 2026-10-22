@@ -87,6 +87,14 @@ return {
     },
   },
   filetypes = { "lua" },
+  -- 工作区根标记：优先项目配置（.luarc.json），其次常见工程标记；避免 root_dir 为空导致
+  -- 跨文件符号/类型解析失败（表现为大量 undefined-global / undefined-field）。
+  root_markers = { ".luarc.json", ".luarc.jsonc", ".git", ".stylua.toml", "stylua.toml" },
+  -- 兜底根目录：未命中上方标记时，从当前文件向上查找 git 根；仍无则用 cwd。
+  root_dir = function(fname)
+    local root = vim.fs.root(fname, { ".git", ".luarc.json", ".luarc.jsonc" })
+    return root or vim.fn.getcwd()
+  end,
   -- 添加初始化选项以减少内存使用
   init_options = {
     -- 禁用一些耗内存的功能
