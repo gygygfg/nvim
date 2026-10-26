@@ -46,9 +46,7 @@ local function utf8_decode_char(s, i)
     end
   elseif b >= 0xE0 and b <= 0xEF then
     if is_cont(1) and is_cont(2) then
-      local cp = (b - 0xE0) * 0x1000
-        + (s:byte(i + 1) - 0x80) * 0x40
-        + (s:byte(i + 2) - 0x80)
+      local cp = (b - 0xE0) * 0x1000 + (s:byte(i + 1) - 0x80) * 0x40 + (s:byte(i + 2) - 0x80)
       if cp >= 0x800 and not (cp >= 0xD800 and cp <= 0xDFFF) then
         return cp, i + 3
       end
@@ -660,7 +658,7 @@ function M.generate_ai_commit_message(callback, options)
     messages = {
       {
         role = "system",
-        content = "你是一个专业的 Git 提交信息生成助手，擅长根据代码变更生成简洁、规范的中文 commit message。请聚焦变更的实际内容做精炼概括，避免「更新文档/更新代码」等笼统措辞。",
+        content = "你是一个专业的 Git 提交信息生成助手，擅长根据代码变更生成简洁、规范的中文 commit message。请聚焦变更的实际内容做精炼概括，避免「docs:/更新文档/更新代码」等笼统措辞。",
       },
       { role = "user", content = prompt },
     },
