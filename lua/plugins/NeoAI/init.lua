@@ -15,12 +15,14 @@ if vim.fn.filereadable(local_neoai .. "/lua/NeoAI/init.lua") == 1 then
   -- 而加载到过期代码（曾导致本地改动不生效）。
   local stale = vim.fn.glob(vim.fn.stdpath("data") .. "/site/pack/*/opt/NeoAI", false, true)
   for _, p in ipairs(stale) do
-    pcall(function() vim.opt.rtp:remove(p) end)
+    pcall(function()
+      vim.opt.rtp:remove(p)
+    end)
   end
 else
   -- 本地不存在：从 GitHub 安装并 packadd
   vim.pack.add({ gh("gygygfg/NeoAI") })
-  vim.cmd("packadd NeoAI")
+  -- vim.cmd("packadd NeoAI")
 end
 
 local godot_tools = require("plugins.NeoAI.tools.godot_tools")
@@ -42,13 +44,6 @@ require("NeoAI").setup({
   },
   tools = {
     external = godot_tools.get_tools(),
-    -- 本机（Android/Termux）无 bwrap，且内核拒绝 unprivileged user namespace
-    -- （`unshare: Operation not permitted`），故没有任何可用隔离后端。显式允许「直跑」：
-    -- 命令直接在宿主执行（无沙箱隔离、写入直接落盘），并保留告警/审计。
-    -- ⚠ 若更换到支持 bwrap/userns 的环境，请移除本项以恢复沙箱保护。
-    sandbox = {
-      allow_unisolated = true,
-    },
     -- 启用网页抓取工具：把动态网页（React/Vue/SPA）在无头浏览器渲染后转成 Markdown。
     -- ⚠️ 启用会自动安装 Node 依赖（node/npm 需已安装）；详见 NeoAI 默认配置注释。
     web_fetch = {
@@ -59,4 +54,5 @@ require("NeoAI").setup({
       ignore_system_proxy = true,
     },
   },
+  ui = { chat = { flod = { "process" } } },
 })
