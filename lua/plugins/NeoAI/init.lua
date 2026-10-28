@@ -54,5 +54,5 @@ require("NeoAI").setup({
       ignore_system_proxy = true,
     },
   },
-  ui = { chat = { flod = { "process" } } },
+  ui = { chat = { fold = "process" } },
 })

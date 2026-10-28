@@ -555,33 +555,485 @@ function M.safe_git_commit(message, options)
   end
 end
 
-local function generate_fallback_commit_message(diff_output, callback)
-  -- 备用方案：使用简单的规则生成提交信息
-  -- 静默提示：使用备用方案
-  -- vim.notify("使用备用规则生成提交信息", vim.log.levels.INFO)
+-- ========== 变更上下文提取（按重要性挑选 diff，避免被文档淹没） ==========
 
-  -- 分析 diff 内容，生成简单的提交信息
-  local commit_type = "chore"
-  local summary = "update files"
+local DOC_EXTS = { md = true, markdown = true, rst = true, adoc = true, org = true, tex = true }
+local CONFIG_EXTS = {
+  json = true,
+  jsonc = true,
+  yaml = true,
+  yml = true,
+  toml = true,
+  ini = true,
+  conf = true,
+  cfg = true,
+  env = true,
+}
+local NOISE_FILES = {
+  ["package-lock.json"] = true,
+  ["pnpm-lock.yaml"] = true,
+  ["yarn.lock"] = true,
+  ["go.sum"] = true,
+  ["cargo.lock"] = true,
+  ["poetry.lock"] = true,
+  ["nvim-pack-lock.json"] = true,
+}
+local KIND_LABEL = { code = "代码", test = "测试", config = "配置", doc = "文档", noise = "锁/生成" }
+local KIND_ORDER = { code = 1, test = 2, config = 3, doc = 4, noise = 5 }
 
-  -- 简单的启发式规则
-  if diff_output:match("function%s+[%w_]+") or diff_output:match("def%s+[%w_]+") then
-    commit_type = "feat"
-    summary = "add new function"
-  elseif diff_output:match("fix%f[%A]") or diff_output:match("bug%f[%A]") then
-    commit_type = "fix"
-    summary = "fix issue"
-  elseif diff_output:match("refactor%f[%A]") then
-    commit_type = "refactor"
-    summary = "refactor code"
-  elseif diff_output:match("test%f[%A]") then
-    commit_type = "test"
-    summary = "add tests"
+--- 执行 git 命令，成功返回输出（可能为空串），失败返回 nil
+local function git_capture(args)
+  local out = vim.fn.system("git " .. args)
+  if vim.v.shell_error ~= 0 then
+    return nil
+  end
+  return out
+end
+
+--- 收集本次变更的 diff / stat / name-status
+--- @param include_unstaged boolean 是否包含未暂存改动
+--- @return table|nil { base, stat, diff, name_status }
+local function collect_changes(include_unstaged)
+  -- 优先暂存区；暂存区为空时回落到工作区（与原行为一致）
+  local bases = include_unstaged and { "HEAD" } or { "--cached", "" }
+  for _, base in ipairs(bases) do
+    local prefix = base == "" and "diff" or ("diff " .. base)
+    local stat = git_capture(prefix .. " --stat")
+    if stat and stat ~= "" then
+      return {
+        base = base,
+        stat = stat,
+        diff = git_capture(prefix) or "",
+        name_status = git_capture(prefix .. " --name-status") or "",
+      }
+    end
+  end
+  return nil
+end
+
+--- 文件类别：code | test | config | doc | noise
+local function classify_path(path)
+  local lower = path:lower()
+  local name = lower:match("([^/]+)$") or lower
+  local ext = name:match("%.([%w_]+)$")
+
+  if
+    NOISE_FILES[name]
+    or lower:match("/vendor/")
+    or lower:match("/dist/")
+    or lower:match("/node_modules/")
+    or lower:match("%.min%.[a-z]+$")
+    or lower:match("%.lock$")
+  then
+    return "noise"
+  end
+  if ext and DOC_EXTS[ext] then
+    return "doc"
+  end
+  if
+    lower:match("^docs?/")
+    or lower:match("/docs?/")
+    or name:match("^readme")
+    or name:match("^changelog")
+    or name:match("^license")
+  then
+    return "doc"
+  end
+  if lower:match("test") or lower:match("spec") then
+    return "test"
+  end
+  if ext and CONFIG_EXTS[ext] then
+    return "config"
+  end
+  return "code"
+end
+
+--- 解析 git diff --stat，返回文件列表（含改动行数）
+local function parse_stat(stat)
+  local files = {}
+  for line in (stat or ""):gmatch("[^\n]+") do
+    local path, changed = line:match("^%s*(.-)%s*|%s*(%d+)")
+    if not path then
+      local bin_path = line:match("^%s*(.-)%s*|%s*Bin")
+      if bin_path and bin_path ~= "" then
+        path, changed = bin_path, 0
+      end
+    end
+    if path and path ~= "" and not path:match("changed") then
+      files[#files + 1] = { path = (path:gsub('"', "")), changed = tonumber(changed) or 0 }
+    end
+  end
+  return files
+end
+
+--- 按 `diff --git` 切分，返回 path -> 单文件 diff 文本
+local function split_diff_by_file(diff)
+  local map = {}
+  local current
+  for line in (diff .. "\n"):gmatch("([^\n]*)\n") do
+    local header_path = line:match("^diff %-%-git .-%sb/(.+)$")
+    if header_path then
+      if current then
+        map[current.path] = table.concat(current.buf, "\n")
+      end
+      current = { path = header_path, buf = { line } }
+    elseif current then
+      current.buf[#current.buf + 1] = line
+    end
+  end
+  if current then
+    map[current.path] = table.concat(current.buf, "\n")
+  end
+  return map
+end
+
+--- 从 --name-status 提取新增文件集合
+local function parse_new_files(name_status)
+  local added = {}
+  for line in (name_status or ""):gmatch("[^\n]+") do
+    local status, path = line:match("^(%u)%s+(.+)$")
+    if status == "A" and path then
+      added[path] = true
+    end
+  end
+  return added
+end
+
+--- 组装喂给模型的变更上下文，并给出本地分析结论
+--- @return table { text, files, has_code, doc_only, new_files, suggested_type }
+local function build_change_context(changes)
+  local files = parse_stat(changes.stat)
+  local added = parse_new_files(changes.name_status)
+  local diff_map = split_diff_by_file(changes.diff or "")
+
+  local weight = { code = 0, test = 0, config = 0, doc = 0, noise = 0 }
+  for _, f in ipairs(files) do
+    f.kind = classify_path(f.path)
+    f.is_new = added[f.path] == true
+    weight[f.kind] = weight[f.kind] + f.changed
   end
 
-  local ai_message = commit_type .. ": " .. summary
-  if #ai_message > 50 then
-    ai_message = ai_message:sub(1, 50)
+  -- 排序：代码/测试优先，同类按改动量降序
+  table.sort(files, function(a, b)
+    local oa, ob = KIND_ORDER[a.kind] or 9, KIND_ORDER[b.kind] or 9
+    if oa ~= ob then
+      return oa < ob
+    end
+    if a.changed ~= b.changed then
+      return a.changed > b.changed
+    end
+    return a.path < b.path
+  end)
+
+  local has_code = weight.code > 0 or weight.test > 0
+  local doc_only = (weight.code + weight.test + weight.config) == 0 and weight.doc > 0
+
+  local suggested_type
+  if doc_only then
+    suggested_type = "docs"
+  elseif weight.test > 0 and weight.test >= weight.code then
+    suggested_type = "test"
+  elseif not has_code and weight.config > 0 then
+    suggested_type = "chore"
+  elseif has_code then
+    for _, f in ipairs(files) do
+      if f.is_new and f.kind == "code" then
+        suggested_type = "feat"
+        break
+      end
+    end
+  end
+
+  -- 概览：全量文件（最多 60 行）按重要性列出，让模型先看到全局
+  local overview = {}
+  for i, f in ipairs(files) do
+    if i > 60 then
+      overview[#overview + 1] = string.format("- …… 其余 %d 个文件略", #files - i + 1)
+      break
+    end
+    overview[#overview + 1] = string.format(
+      "- %s%s（%s，约 %d 行）",
+      f.path,
+      f.is_new and " [新增]" or "",
+      KIND_LABEL[f.kind] or "其他",
+      f.changed
+    )
+  end
+
+  -- 细节：有代码改动时只展开代码/测试/配置，文档仅列路径（关键：避免文档 diff 挤掉代码）
+  local detail_files = {}
+  for _, f in ipairs(files) do
+    if f.kind ~= "noise" then
+      if has_code or weight.config > 0 then
+        if f.kind ~= "doc" then
+          detail_files[#detail_files + 1] = f
+        end
+      elseif f.kind == "doc" then
+        detail_files[#detail_files + 1] = f
+      end
+    end
+  end
+
+  local total_budget = has_code and 6000 or 3000
+  local per_file_budget = has_code and 1800 or 1200
+  local used = 0
+  local details = {}
+  for _, f in ipairs(detail_files) do
+    local block = diff_map[f.path]
+    if block then
+      if used >= total_budget then
+        break
+      end
+      local clipped = block
+      if vim.fn.strchars(clipped) > per_file_budget then
+        clipped = vim.fn.strcharpart(clipped, 0, per_file_budget) .. "\n... （该文件 diff 已截断）"
+      end
+      if used + vim.fn.strchars(clipped) > total_budget then
+        clipped = vim.fn.strcharpart(clipped, 0, math.max(0, total_budget - used))
+          .. "\n... （已达总长度上限，后续文件略）"
+        details[#details + 1] = clipped
+        used = total_budget
+        break
+      end
+      details[#details + 1] = clipped
+      used = used + vim.fn.strchars(clipped)
+    end
+  end
+  if #details == 0 then
+    -- 兜底：按文件切分失败时退化为整体截断
+    details[1] = vim.fn.strcharpart(changes.diff or "", 0, total_budget)
+  end
+
+  local doc_paths = {}
+  if has_code then
+    for _, f in ipairs(files) do
+      if f.kind == "doc" then
+        doc_paths[#doc_paths + 1] = f.path
+      end
+    end
+  end
+
+  local parts = { "## 变更概览（按重要性排序）", table.concat(overview, "\n") }
+  if #doc_paths > 0 then
+    parts[#parts + 1] =
+      string.format("\n## 顺带修改的文档（共 %d 个，diff 从略）：%s", #doc_paths, table.concat(doc_paths, ", "))
+  end
+  parts[#parts + 1] = "\n## 改动细节（diff）\n" .. table.concat(details, "\n\n")
+
+  return {
+    text = table.concat(parts, "\n"),
+    files = files,
+    has_code = has_code,
+    doc_only = doc_only,
+    new_files = added,
+    suggested_type = suggested_type,
+  }
+end
+
+--- 构建提示词（刻意不给 docs 之类的示例句，避免示例锚定）
+local function build_commit_prompt(ctx)
+  local type_table = table.concat({
+    "feat=新增功能或能力",
+    "fix=修复缺陷或错误行为",
+    "refactor=不改变行为的重构",
+    "perf=性能优化",
+    "test=测试相关",
+    "docs=仅文档或注释说明",
+    "chore=构建/依赖/配置/杂务",
+    "style=纯格式调整",
+    "ci=流水线脚本",
+  }, "；")
+
+  local lines = {
+    "请阅读下面这次 Git 变更，生成一条中文 conventional commit 提交信息。",
+    "",
+    ctx.text,
+    "",
+    "## 输出规则",
+    "1. type 只由「主要改动」决定：以概览中改动量最大、且属于代码/测试/配置的文件为准，不要被顺带修改的文档带偏。",
+    "2. 可选 type：" .. type_table .. "。",
+    "3. 只要涉及代码文件（.lua/.js/.py/.go 等）的改动，就禁止使用 docs；仅当全部改动都是文档时才可用 docs。",
+    "4. 描述必须具体：点明被改动的模块、函数、配置项或行为，禁止「更新文档」「更新代码」「优化代码」「若干修改」这类空话。",
+    "5. 有明确模块名时加 scope，取所在目录或子系统名（如 sandbox / chat / commit / ui）。",
+    "6. 只输出一行 `type(scope): 描述` 或 `type: 描述`：中文、总长不超过 50 字、不带引号、不带代码块、不带句号、不做解释。",
+  }
+
+  if ctx.has_code then
+    lines[#lines + 1] =
+      "\n## 本次硬约束\n本次变更包含代码文件，type 必须从 feat / fix / refactor / perf / test / chore / style / build / ci 中选择，禁止使用 docs。"
+  elseif ctx.doc_only then
+    lines[#lines + 1] = "\n## 本次硬约束\n本次变更只涉及文档，type 必须是 docs。"
+  end
+  if ctx.suggested_type then
+    lines[#lines + 1] =
+      string.format("（本地静态分析倾向 type=%s，仅供参考，与你的判断不符时可覆盖。）", ctx.suggested_type)
+  end
+  lines[#lines + 1] = "\n提交信息："
+
+  return table.concat(lines, "\n")
+end
+
+local VALID_TYPES = {
+  feat = true,
+  fix = true,
+  refactor = true,
+  perf = true,
+  test = true,
+  docs = true,
+  chore = true,
+  style = true,
+  build = true,
+  ci = true,
+  revert = true,
+}
+
+--- 取第一处非空行（模型偶尔会输出解释或多行）
+local function first_line(text)
+  for line in (text .. "\n"):gmatch("([^\n]*)\n") do
+    local trimmed = line:gsub("^%s+", ""):gsub("%s+$", "")
+    if trimmed ~= "" and not trimmed:match("^```") then
+      return trimmed
+    end
+  end
+  return ""
+end
+
+--- 无 type 时按描述措辞兜底推断
+local function guess_type_from_desc(desc)
+  local d = (desc or ""):lower()
+  if d:match("修复") or d:match("修正") or d:match("解决") or d:match("bug") then
+    return "fix"
+  end
+  if d:match("新增") or d:match("添加") or d:match("实现") or d:match("支持") then
+    return "feat"
+  end
+  if d:match("重构") or d:match("拆分") or d:match("重命名") or d:match("整理") then
+    return "refactor"
+  end
+  if d:match("性能") or d:match("加速") then
+    return "perf"
+  end
+  if d:match("测试") then
+    return "test"
+  end
+  return nil
+end
+
+--- 依据变更文件列表生成兜底描述（凑不出具体内容时用）
+local function describe_by_files(ctx)
+  local top, total = nil, 0
+  for _, f in ipairs(ctx.files or {}) do
+    if f.kind ~= "noise" then
+      total = total + 1
+      if not top then
+        top = f
+      end
+    end
+  end
+  if not top then
+    return "更新变更文件"
+  end
+  local base = top.path:gsub("^.*/", "")
+  if total <= 1 then
+    return "调整 " .. base
+  end
+  return string.format("调整 %s 等 %d 个文件", base, total)
+end
+
+--- 是否为空泛描述（这类描述一律视为无效，需替换为具体内容）
+local function is_vague_desc(desc)
+  local d = (desc or ""):gsub("[。%.%s]+$", ""):lower()
+  if vim.fn.strchars(d) < 4 then
+    return true
+  end
+  for _, vague in ipairs({
+    "更新文档",
+    "更新代码",
+    "更新内容",
+    "更新文件",
+    "修改代码",
+    "优化代码",
+    "代码更新",
+    "文档更新",
+    "若干修改",
+    "一些修改",
+    "update",
+    "update files",
+    "update docs",
+    "misc",
+  }) do
+    if d == vague then
+      return true
+    end
+  end
+  return false
+end
+
+--- 解析出 (type, scope, desc)；type 非法时 type 为 nil
+local function split_commit_message(msg)
+  local typ, scope, desc = msg:match("^(%a+)(%b())%s*[:：]%s*(.+)$")
+  if not typ then
+    typ, desc = msg:match("^(%a+)%s*[:：]%s*(.+)$")
+    scope = nil
+  end
+  if typ then
+    typ = typ:lower()
+    if not VALID_TYPES[typ] then
+      return nil, nil, msg
+    end
+    return typ, scope, desc
+  end
+  return nil, nil, msg
+end
+
+--- 规范化 AI 输出；need_retry 表示「含代码改动却标了 docs」，需带强约束重试一次
+local function normalize_commit_message(raw, ctx)
+  local msg = clean_content(first_line(raw or ""))
+  if not msg then
+    return nil, false
+  end
+
+  local typ, scope, desc = split_commit_message(msg)
+  local need_retry = false
+
+  if not typ then
+    desc = desc:gsub("^%a+%s*[:：]%s*", "")
+    local fallback_type = ctx.suggested_type
+      or guess_type_from_desc(desc)
+      or (ctx.has_code and "chore" or "docs")
+    msg = fallback_type .. ": " .. desc
+  else
+    need_retry = (typ == "docs") and not ctx.doc_only
+    msg = typ .. (scope or "") .. ": " .. desc
+  end
+
+  msg = msg:gsub("[。%.!！%s]+$", "")
+  if vim.fn.strchars(msg) > 72 then
+    msg = vim.fn.strcharpart(msg, 0, 72)
+  end
+  return msg, need_retry
+end
+
+--- 重试后仍是 docs 时，按本地分析强制纠正 type
+local function force_commit_type(msg, ctx)
+  local typ, scope, desc = split_commit_message(msg)
+  if typ and typ ~= "docs" then
+    return msg
+  end
+  local desc_text = (typ and desc) or msg
+  if is_vague_desc(desc_text) then
+    desc_text = describe_by_files(ctx)
+  end
+  local new_type = ctx.suggested_type or guess_type_from_desc(desc_text) or (ctx.has_code and "chore" or "docs")
+  return new_type .. (scope or "") .. ": " .. desc_text
+end
+
+--- 备用方案：本地规则生成提交信息（API 不可用或返回异常时）
+local function generate_fallback_commit_message(ctx, callback)
+  local commit_type = ctx.suggested_type or (ctx.has_code and "chore" or "docs")
+  local ai_message = commit_type .. ": " .. describe_by_files(ctx)
+  if vim.fn.strchars(ai_message) > 50 then
+    ai_message = vim.fn.strcharpart(ai_message, 0, 50)
   end
 
   callback(ai_message)
@@ -592,54 +1044,24 @@ function M.generate_ai_commit_message(callback, options)
   options = options or {}
   local include_unstaged = options.include_unstaged or false
 
-  -- 获取 git diff 信息
-  local diff_output
-
-  if include_unstaged then
-    -- 如果需要包含未暂存的更改，获取所有更改（暂存 + 未暂存）
-    diff_output = vim.fn.system("git diff HEAD")
-  else
-    -- 默认只获取暂存的更改
-    diff_output = vim.fn.system("git diff --cached")
-
-    if vim.v.shell_error ~= 0 or diff_output == "" then
-      -- 如果没有暂存的更改，获取未暂存的更改
-      diff_output = vim.fn.system("git diff")
-    end
-  end
-
-  if vim.v.shell_error ~= 0 or diff_output == "" then
+  -- 关键修复：旧实现只截取 `git diff` 的前 2000 字符，而 git diff 按路径排序，
+  -- README/docs 往往排在 lua/ 等代码目录之前，导致模型只看得到文档改动 → 输出清一色的 docs:。
+  -- 现在改为：先按「代码优先」重排文件、再挑选 diff 片段，文档改动只列路径。
+  local changes = collect_changes(include_unstaged)
+  if not changes then
     vim.notify("没有检测到 git 更改", vim.log.levels.WARN)
     callback(nil)
     return
   end
 
-  -- 限制 diff 长度，避免给 AI 过长上下文（超过 2000 字按字符截断）
-  local max_diff_chars = 2000
-  if vim.fn.strchars(diff_output) > max_diff_chars then
-    diff_output = vim.fn.strcharpart(diff_output, 0, max_diff_chars) .. "\n... (truncated)"
-  end
-
-  -- 构建 AI 提示词
-  -- 要点：输出「简短但全面」的提交信息，聚焦实际改动内容；
-  -- 不要因为顺带更新了文档（docs/docx 等）就笼统地写“更新文档”。
-  local prompt = [[请根据以下 git diff 信息，生成一个简洁的提交信息。
-  要求：
-  1. 使用中文，采用 conventional commit 格式（如：feat: 新增xx、fix: 修复xx、docs: 补充xx说明）
-  2. 用一句话精炼概括本次变更，尽量简短（不超过 50 个字符，越精炼越好）
-  3. 描述“实际改了什么”，即变动的核心内容或目的，不要笼统地写“更新文档”“修改代码”之类
-  4. 即使改动涉及文档，也要点明文档的具体内容（如：补充配置示例、更新 API 说明），不要因为顺带更新了文档就只写 docs/docx
-  5. 若代码变更是主体，忽略其中顺带的文档、格式、注释等次要改动，聚焦核心变更
-  6. 只输出提交信息本身，不要加引号、代码块或任何多余解释
-
-  Git diff:
-  ]] .. diff_output .. "\n\n提交信息："
+  local ctx = build_change_context(changes)
+  local prompt = build_commit_prompt(ctx)
 
   -- 自建请求：OpenAI 兼容协议（POST {base_url}/chat/completions，Bearer 鉴权），
   -- 不依赖 NeoAI；配置见文件顶部 config，可用 M.configure()/M.setup({...}) 覆盖。
   if not config.api_key or config.api_key == "" then
     vim.notify("未配置 API Key（COMMIT_AI_API_KEY / DEEPSEEK_API_KEY），使用备用方案", vim.log.levels.WARN)
-    generate_fallback_commit_message(diff_output, callback)
+    generate_fallback_commit_message(ctx, callback)
     return
   end
 
@@ -653,66 +1075,98 @@ function M.generate_ai_commit_message(callback, options)
     ["Content-Type"] = "application/json",
     ["Authorization"] = "Bearer " .. config.api_key,
   }
-  local body = json.encode({
-    model = model,
-    messages = {
-      {
-        role = "system",
-        content = "你是一个专业的 Git 提交信息生成助手，擅长根据代码变更生成简洁、规范的中文 commit message。请聚焦变更的实际内容做精炼概括，避免「docs:/更新文档/更新代码」等笼统措辞。",
+  local system_content = config.system_prompt
+    or "你是资深工程师，负责把 Git 变更总结成规范的中文 conventional commit 提交信息。严格遵守用户给出的类型规则与输出格式：只输出一行提交信息，不解释、不寒暄、不使用代码块。"
+
+  --- 发起一次请求（extra_rule 用于「类型跑偏」时的纠正型重试）
+  local function request(extra_rule, on_done)
+    local user_content = prompt
+    if extra_rule and extra_rule ~= "" then
+      user_content = prompt .. "\n\n## 补充要求（必须遵守）\n" .. extra_rule
+    end
+
+    local body = json.encode({
+      model = model,
+      messages = {
+        { role = "system", content = system_content },
+        { role = "user", content = user_content },
       },
-      { role = "user", content = prompt },
-    },
-    temperature = config.temperature,
-    max_tokens = config.max_tokens,
-    stream = false,
-  })
+      temperature = config.temperature,
+      max_tokens = config.max_tokens,
+      stream = false,
+    })
 
-  local function fail(msg)
-    vim.notify("AI 请求失败: " .. tostring(msg or "未知错误"), vim.log.levels.ERROR)
-    generate_fallback_commit_message(diff_output, callback)
-  end
+    -- 简单指数退避重试（仅对网络/服务端错误重试，4xx 直接失败）
+    local attempt = 0
+    local max_attempts = math.max(0, config.max_retries or 0) + 1
 
-  -- 简单指数退避重试（仅对网络/服务端错误重试，4xx 直接失败）
-  local attempt = 0
-  local max_attempts = math.max(0, config.max_retries or 0) + 1
-
-  local function do_request()
-    attempt = attempt + 1
-    http_post_json(url, headers, body, config.timeout_ms, function(ok, data, err, status)
-      if not ok then
-        if attempt < max_attempts and (not status or status >= 500) then
-          vim.defer_fn(do_request, 300 * attempt)
+    local function do_request()
+      attempt = attempt + 1
+      http_post_json(url, headers, body, config.timeout_ms, function(ok, data, err, status)
+        if not ok then
+          if attempt < max_attempts and (not status or status >= 500) then
+            vim.defer_fn(do_request, 300 * attempt)
+            return
+          end
+          on_done(nil, err)
           return
         end
-        fail(err)
-        return
-      end
 
-      local parsed = json.decode(data)
-      if not parsed then
-        fail("响应解析失败: " .. tostring(data):sub(1, 200))
-        return
-      end
+        local parsed = json.decode(data)
+        if not parsed then
+          on_done(nil, "响应解析失败: " .. tostring(data):sub(1, 200))
+          return
+        end
 
-      if parsed.error then
-        local emsg = type(parsed.error) == "table" and parsed.error.message or parsed.error
-        fail(tostring(emsg))
-        return
-      end
+        if parsed.error then
+          local emsg = type(parsed.error) == "table" and parsed.error.message or parsed.error
+          on_done(nil, tostring(emsg))
+          return
+        end
 
-      local choice = parsed.choices and parsed.choices[1]
-      local raw = choice and choice.message and choice.message.content or nil
-      local content = clean_content(raw)
-      if content then
-        callback(content)
-      else
-        vim.notify("AI 返回内容为空，使用备用方案", vim.log.levels.WARN)
-        generate_fallback_commit_message(diff_output, callback)
-      end
-    end)
+        local choice = parsed.choices and parsed.choices[1]
+        on_done(choice and choice.message and choice.message.content or nil, nil)
+      end)
+    end
+
+    do_request()
   end
 
-  do_request()
+  request(nil, function(raw, err)
+    if not raw then
+      vim.notify("AI 请求失败: " .. tostring(err or "未知错误") .. "，使用备用方案", vim.log.levels.ERROR)
+      generate_fallback_commit_message(ctx, callback)
+      return
+    end
+
+    local msg, need_retry = normalize_commit_message(raw, ctx)
+    if not msg then
+      vim.notify("AI 返回内容为空，使用备用方案", vim.log.levels.WARN)
+      generate_fallback_commit_message(ctx, callback)
+      return
+    end
+
+    if need_retry then
+      -- 明明含代码改动却写了 docs：带上强约束重试一次
+      local main_file = (ctx.files[1] and ctx.files[1].path) or "代码文件"
+      local main_changed = (ctx.files[1] and ctx.files[1].changed) or 0
+      local hint = string.format(
+        "上一次输出用了 docs，但本次变更包含代码改动（主要文件：%s，约 %d 行）。请重新输出：type 不得为 docs，必须是 feat/fix/refactor/perf/test/chore 之一，描述要写清具体改了什么。",
+        main_file,
+        main_changed
+      )
+      request(hint, function(raw2)
+        local msg2, still_docs = normalize_commit_message(raw2 or "", ctx)
+        if not msg2 or still_docs then
+          msg2 = force_commit_type(msg2 or msg, ctx)
+        end
+        callback(msg2)
+      end)
+      return
+    end
+
+    callback(msg)
+  end)
 end
 
 --- 注册快捷键。可选传入配置覆盖默认值，例如：
@@ -787,5 +1241,18 @@ function M.setup(opts)
     end)
   end, { desc = "[Git] 提交 (自定义，支持 AI 生成)" })
 end
+
+-- 暴露内部实现，便于调试与测试（例如观察生成的 prompt、验证类型推断）
+M._internal = {
+  collect_changes = collect_changes,
+  classify_path = classify_path,
+  parse_stat = parse_stat,
+  split_diff_by_file = split_diff_by_file,
+  build_change_context = build_change_context,
+  build_commit_prompt = build_commit_prompt,
+  normalize_commit_message = normalize_commit_message,
+  force_commit_type = force_commit_type,
+  generate_fallback_commit_message = generate_fallback_commit_message,
+}
 
 return M
