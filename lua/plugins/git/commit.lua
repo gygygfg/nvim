@@ -434,7 +434,8 @@ local function http_post_json(url, headers, body, timeout_ms, callback)
   end
 end
 
---- 清洗 AI 返回的提交信息：去引号/代码块/多余空白，并限制长度。
+--- 清洗 AI 返回的提交信息：去引号/代码块/多余空白。
+--- 注意：此处不截断长度，长度约束只写在提示词里，模型真返回长文本也原样保留。
 --- @param content any
 --- @return string|nil
 local function clean_content(content)
@@ -459,10 +460,6 @@ local function clean_content(content)
   s = s:gsub("^%s+", ""):gsub("%s+$", "")
   if s == "" then
     return nil
-  end
-  -- 限制长度（conventional commit 建议 ≤ 72）
-  if vim.fn.strchars(s) > 72 then
-    s = vim.fn.strcharpart(s, 0, 72)
   end
   return s
 end
@@ -1008,9 +1005,7 @@ local function normalize_commit_message(raw, ctx)
   end
 
   msg = msg:gsub("[。%.!！%s]+$", "")
-  if vim.fn.strchars(msg) > 72 then
-    msg = vim.fn.strcharpart(msg, 0, 72)
-  end
+  -- 不截断 AI 返回的提交信息（长度只由提示词约束）
   return msg, need_retry
 end
 
