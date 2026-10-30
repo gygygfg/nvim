@@ -209,6 +209,83 @@ local function resolve_conflict_file_local(file)
   vim.fn.system("printf '%s' " .. vim.fn.shellescape(result) .. " > " .. vim.fn.shellescape(file))
 end
 
+-- ============================================
+-- 缓冲区刷新工具：把磁盘上的改动同步回已打开的缓冲区
+-- ============================================
+-- 只处理「已加载 + 有文件名 + buftype == ""」的普通文件缓冲区。
+-- dashboard / :new / 终端 / quickfix / help 这类缓冲区名字为空或 buftype 特殊，
+-- 在其上执行 :edit! 会抛 E32: No file name（这正是 <leader>gL 之前报错的原因）。
+-- force = true  → :edit!     丢弃缓冲区未保存改动，强制重读磁盘（"用远程覆盖本地"）
+-- force = false → :checktime 仅重载磁盘确实变化的文件，保留未保存改动（普通 pull）
+-- 返回：已处理缓冲区数, 因有未保存改动而跳过的缓冲区数
+local function refresh_open_buffers(opts)
+  opts = opts or {}
+  local force = opts.force == true
+  local reloaded, skipped = 0, 0
+
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if
+      vim.api.nvim_buf_is_loaded(buf)
+      and vim.api.nvim_buf_get_name(buf) ~= ""
+      and vim.bo[buf].buftype == ""
+    then
+      -- 非强制模式下跳过「有未保存改动」的缓冲区：
+      -- 磁盘变了 + 缓冲区也改了时 checktime 会弹 W12 交互提示，这里保留用户改动、不打扰
+      if not force and vim.bo[buf].modified then
+        skipped = skipped + 1
+      else
+        -- pcall + silent! 双保险：文件已被删除、缓冲区不可编辑等边界情况不刷错
+        local ok = pcall(vim.api.nvim_buf_call, buf, function()
+          vim.cmd(force and "silent! edit!" or "silent! checktime")
+        end)
+        if ok then
+          reloaded = reloaded + 1
+        end
+      end
+    end
+  end
+
+  return reloaded, skipped
+end
+
+-- 普通拉取（:Git pull）以及 checkout/rebase/reset 等操作完成后刷新已打开文件。
+-- 为什么用事件钩子而不是紧跟 :Git pull 之后调用：fugitive 的 :Git 是异步的，
+-- vim.cmd("Git pull") 会立即返回（此刻磁盘尚未变化），FugitiveChanged 才是命令结束后的时机。
+-- 这里用 :checktime 而非 :edit!：只重载磁盘确实变化的文件，保留未保存改动，语义更安全。
+vim.api.nvim_create_autocmd("User", {
+  pattern = "FugitiveChanged",
+  callback = function()
+    -- 过滤掉不碰工作区文件的只读命令（push/fetch 之类无需刷新缓冲区）
+    local result = vim.g.fugitive_result
+    if type(result) == "table" and type(result.args) == "table" then
+      local readonly = {
+        push = true,
+        fetch = true,
+        status = true,
+        log = true,
+        diff = true,
+        blame = true,
+        show = true,
+        grep = true,
+      }
+      for _, arg in ipairs(result.args) do
+        if readonly[arg] then
+          return
+        end
+      end
+      -- 命令失败（冲突/中止）时不改缓冲区内容
+      if result.exit_status ~= nil and result.exit_status ~= 0 then
+        return
+      end
+    end
+
+    -- 延后到本次自动命令处理结束：避免在 fugitive 的自动命令上下文里直接改缓冲区
+    vim.schedule(function()
+      pcall(refresh_open_buffers, { force = false })
+    end)
+  end,
+})
+
 vim.api.nvim_create_autocmd("VimEnter", {
   -- 初始化 Git 相关配置
   -- 加载 git commit 模块
@@ -239,6 +316,9 @@ vim.api.nvim_create_autocmd("VimEnter", {
     vim.keymap.set("n", "<leader>gs", "<cmd>Gstatus<CR>", { desc = "[Git] 状态" })
     vim.keymap.set("n", "<leader>gd", "<cmd>Gdiff<CR>", { desc = "[Git] 差异" })
     vim.keymap.set("n", "<leader>gb", "<cmd>Gblame<CR>", { desc = "[Git] 追溯" })
+    -- 普通推送/拉取：仍走 fugitive 的 :Git（异步、有输出窗口、冲突后可 <leader>gs 处理）。
+    -- 拉取成功后无需手动 :e —— 上面的 User FugitiveChanged 钩子会以 :checktime 刷新已打开文件；
+    -- 推送不改工作区文件，故不需要刷新缓冲区。
     vim.keymap.set("n", "<leader>gp", "<cmd>Git push<CR>", { desc = "[Git] 推送" })
     vim.keymap.set("n", "<leader>gl", "<cmd>Git pull<CR>", { desc = "[Git] 拉取" })
 
@@ -274,7 +354,15 @@ vim.api.nvim_create_autocmd("VimEnter", {
               on_exit = function(_, reset_code)
                 if reset_code == 0 then
                   vim.notify("✅ 已用 origin/" .. branch .. " 覆盖本地", vim.log.levels.INFO)
-                  vim.cmd("edit!") -- 重新加载当前文件，同步磁盘内容
+                  -- reset --hard 会改动多个文件，需要同步所有已打开的普通文件缓冲区。
+                  -- force = true → :edit! 强制重读（此处语义就是「覆盖本地」，丢弃缓冲区内未保存改动符合预期）；
+                  -- 只对「有文件名 + buftype == ""」的缓冲区执行，避免 E32: No file name。
+                  vim.schedule(function()
+                    local reloaded = refresh_open_buffers({ force = true })
+                    if reloaded > 0 then
+                      vim.notify("🔄 已重新加载 " .. reloaded .. " 个文件缓冲区", vim.log.levels.INFO)
+                    end
+                  end)
                 else
                   vim.notify("❌ git reset --hard 失败", vim.log.levels.ERROR)
                 end
